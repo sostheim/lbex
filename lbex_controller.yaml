@@ -1,0 +1,20 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: lbex
+  labels:
+    name: lbex
+    app: lbex
+    version: 0.1.0
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: lbex
+        version: 0.1.0
+    spec:
+      containers:
+      - name: lbex
+        image: quay.io/samsung_cnct/lbex:latest
+ 
