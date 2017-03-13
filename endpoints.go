@@ -93,20 +93,6 @@ func endpointUpdated(obj, newObj interface{}) {
 	}
 }
 
-/*
-func endpointsListFunc(clientset *kubernetes.Clientset, namespace string) func(api.ListOptions) (runtime.Object, error) {
-	return func(opts api.ListOptions) (runtime.Object, error) {
-		return c.Endpoints(ns).List(opts)
-	}
-}
-
-func endpointsWatchFunc(clientset *kubernetes.Clientset, namespace string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return c.Endpoints(ns).Watch(options)
-	}
-}
-*/
-
 func (lwc *lwController) syncEndpoints(key string) {
 	//glog.V(3).Infof("Syncing endpoints %v", key)
 

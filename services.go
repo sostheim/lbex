@@ -94,20 +94,6 @@ func serviceUpdated(obj, newObj interface{}) {
 	}
 }
 
-/*
-func serviceListFunc(clientset *kubernetes.Clientset, namespace string) func(api.ListOptions) (runtime.Object, error) {
-	return func(options api.ListOptions) (runtime.Object, error) {
-		return clientset.CoreV1().Services(namespace).List(options)
-	}
-}
-
-func serviceWatchFunc(clientset *kubernetes.Clientset, namespace string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return clientset.CoreV1().Services(namespace).Watch(options)
-	}
-}
-*/
-
 func (lwc *lwController) syncServices(key string) {
 	//glog.V(3).Infof("Syncing services %v", key)
 
