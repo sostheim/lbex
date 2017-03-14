@@ -3,7 +3,7 @@ all: push
 VERSION = 0.1.0
 TAG = latest
 PREFIX ?= quay.io/samsung_cnct/lbex
-SRC = services.go endpoints.go task_queue.go controller.go
+SRC = services.go endpoints.go task_queue.go controller.go main.go
 
 lbex: $(SRC)
 	CGO_ENABLED=0 GOOS=linux godep go build -a -ldflags '-w' -o $@ $(SRC)

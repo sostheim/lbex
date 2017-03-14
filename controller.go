@@ -17,109 +17,60 @@ limitations under the License.
 package main
 
 import (
-	"flag"
-	"os"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/unversioned"
-	"k8s.io/client-go/pkg/util/wait"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
 var (
 	resyncPeriod = 30 * time.Second
-	flags        = pflag.NewFlagSet("", pflag.ExitOnError)
 )
 
 // List Watch (lw) Controller (lwc)
 type lwController struct {
-	controller  *cache.Controller
-	store       cache.Store
-	queue       *taskQueue
-	syncHandler func(key string) error
-	stopCh      chan struct{}
+	controller *cache.Controller
+	stopCh     chan struct{}
 }
 
 // External LB Controller (lbex)
 type lbExController struct {
-	client       *dynamic.Client
-	clientset    *kubernetes.Clientset
-	endpointsLWC *lwController
-	servciesLWC  *lwController
-	stopCh       chan struct{}
+	client    *dynamic.Client
+	clientset *kubernetes.Clientset
+
+	endpointsLWC  *lwController
+	endpointStore cache.Store
+
+	servciesLWC   *lwController
+	servicesStore cache.Store
+
+	stopCh chan struct{}
+	queue  *TaskQueue
 }
 
-func init() {
-	flag.Set("logtostderr", "true")
-	flag.Parse()
-	go wait.Until(glog.Flush, 10*time.Second, wait.NeverStop)
-}
-
-func startListWatches(lbex *lbExController) {
-
-	lbex.servciesLWC = newServicesListWatchControllerForClientset(lbex.clientset)
-	lbex.endpointsLWC = newEndpointsListWatchControllerForClientset(lbex.clientset)
-
-	// run the controller goroutines
-	go lbex.servciesLWC.controller.Run(wait.NeverStop)
-	go lbex.endpointsLWC.controller.Run(wait.NeverStop)
-}
-
-func main() {
-
-	glog.V(3).Infof("lbex.main(): starting")
-
-	// Per https://github.com/kubernetes/kubernetes/issues/17162
-	// Supress goflag's warnings spewing to logs.
-	flags.AddGoFlagSet(flag.CommandLine)
-	flags.Parse(os.Args)
-	flag.CommandLine.Parse([]string{})
-
-	// creates the in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-	config.GroupVersion = &unversioned.GroupVersion{
-		Group:   "",
-		Version: "v1",
-	}
-
-	glog.V(3).Infof("lbex.main(): created config")
-
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// create dynamic client
-	client, err := dynamic.NewClient(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	glog.V(3).Infof("lbex.main(): created client")
-
+func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset) *lbExController {
 	// create external loadbalancer controller struct
-	lbex := &lbExController{
+	lbexc := lbExController{
 		client:    client,
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
 	}
+	lbexc.queue = NewTaskQueue(lbexc.sync)
+	return &lbexc
+}
 
-	glog.V(3).Infof("lbex.main(): staring controllers")
-
-	// services/endpoint controller
-	startListWatches(lbex)
-
-	for {
-		time.Sleep(20 * time.Second)
+func (lbex *lbExController) sync(key string) {
+	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
+	if err != nil {
+		return
 	}
+	if !exists {
+		glog.V(3).Infof("syncServices: unable to find services for key value: %s", key)
+	} else {
+		glog.V(3).Infof("syncServices: updating Services for %v", storeObj)
+	}
+	return
 }

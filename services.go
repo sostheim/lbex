@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"reflect"
+
 	"github.com/golang/glog"
 
 	"k8s.io/client-go/dynamic"
@@ -38,18 +40,17 @@ func newServicesListWatchController() *lwController {
 	lwc := lwController{
 		stopCh: make(chan struct{}),
 	}
-	lwc.queue = newTaskQueue(lwc.syncServices)
 	return &lwc
 }
 
-func newServicesListWatchControllerForClient(client *dynamic.Client) *lwController {
+func newServicesListWatchControllerForClient(lbex *lbExController) *lwController {
 
 	lwc := newServicesListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := &cache.ListWatch{
-		ListFunc:  clientServicesListFunc(client, api.NamespaceAll),
-		WatchFunc: clientServicesWatchFunc(client, api.NamespaceAll),
+		ListFunc:  clientServicesListFunc(lbex.client, api.NamespaceAll),
+		WatchFunc: clientServicesWatchFunc(lbex.client, api.NamespaceAll),
 	}
 	eventHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc:    serviceCreated,
@@ -57,26 +58,37 @@ func newServicesListWatchControllerForClient(client *dynamic.Client) *lwControll
 		DeleteFunc: serviceDeleted,
 	}
 
-	lwc.store, lwc.controller = cache.NewInformer(listWatch, &api.Service{}, resyncPeriod, eventHandlers)
+	lbex.servicesStore, lwc.controller = cache.NewInformer(listWatch, &api.Service{}, resyncPeriod, eventHandlers)
 
 	return lwc
 }
 
-func newServicesListWatchControllerForClientset(clientset *kubernetes.Clientset) *lwController {
+func newServicesListWatchControllerForClientset(lbex *lbExController) *lwController {
 
 	lwc := newServicesListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := cache.NewListWatchFromClient(
-		clientset.Core().RESTClient(), "services", api.NamespaceAll, fields.Everything())
+		lbex.clientset.Core().RESTClient(), "services", api.NamespaceAll, fields.Everything())
 
 	eventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    serviceCreated,
-		DeleteFunc: serviceDeleted,
-		UpdateFunc: serviceUpdated,
+		//AddFunc:    serviceCreated,
+		//DeleteFunc: serviceDeleted,
+		//UpdateFunc: serviceUpdated,
+		AddFunc: func(obj interface{}) {
+			lbex.queue.Enqueue(obj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			lbex.queue.Enqueue(obj)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			if !reflect.DeepEqual(old, cur) {
+				lbex.queue.Enqueue(cur)
+			}
+		},
 	}
 
-	lwc.store, lwc.controller = cache.NewInformer(listWatch, &v1.Service{}, resyncPeriod, eventHandler)
+	lbex.servicesStore, lwc.controller = cache.NewInformer(listWatch, &v1.Service{}, resyncPeriod, eventHandler)
 
 	return lwc
 }
@@ -126,20 +138,5 @@ func clientsetServicesListFunc(client *kubernetes.Clientset, namespace string) f
 func clientsetServicesWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
 	return func(options v1.ListOptions) (watch.Interface, error) {
 		return client.CoreV1().Endpoints(namespace).Watch(options)
-	}
-}
-
-func (lwc *lwController) syncServices(key string) {
-	//glog.V(3).Infof("Syncing services %v", key)
-
-	obj, exists, err := lwc.store.GetByKey(key)
-	if err != nil {
-		lwc.queue.requeue(key, err)
-		return
-	}
-	if !exists {
-		glog.V(3).Infof("Unable to find services for key value: %s", key)
-	} else {
-		glog.V(3).Infof("Updating Services for %v", obj)
 	}
 }

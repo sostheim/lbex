@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,112 +17,74 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/golang/glog"
-
-	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/client-go/pkg/util/wait"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/util/workqueue"
+
+	"github.com/golang/glog"
 )
 
-var (
-	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
-)
+var keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
-// taskQueue manages a work queue through an independent worker that
+// TaskQueue manages a work queue through an independent worker that
 // invokes the given sync function for every work item inserted.
-type taskQueue struct {
+type TaskQueue struct {
 	// queue is the work queue the worker polls
-	queue workqueue.RateLimitingInterface
+	queue *workqueue.Type
 	// sync is called for each item in the queue
-	sync func(interface{}) error
+	sync func(string)
 	// workerDone is closed when the worker exits
 	workerDone chan struct{}
-
-	fn func(obj interface{}) (interface{}, error)
 }
 
-// Run ...
-func (t *taskQueue) run(period time.Duration, stopCh <-chan struct{}) {
+func (t *TaskQueue) run(period time.Duration, stopCh <-chan struct{}) {
 	wait.Until(t.worker, period, stopCh)
 }
 
-// enqueue enqueues ns/name of the given api object in the task queue.
-func (t *taskQueue) enqueue(obj interface{}) {
-	if t.isShuttingDown() {
-		glog.Errorf("queue has been shutdown, failed to enqueue: %v", obj)
-		return
-	}
-
-	glog.V(3).Infof("queuing item %v", obj)
-	key, err := t.fn(obj)
+// Enqueue enqueues ns/name of the given api object in the task queue.
+func (t *TaskQueue) Enqueue(obj interface{}) {
+	key, err := keyFunc(obj)
 	if err != nil {
-		glog.Errorf("%v", err)
+		glog.V(3).Infof("Couldn't get key for object %+v: %v", obj, err)
 		return
 	}
 	t.queue.Add(key)
 }
 
-func (t *taskQueue) defaultKeyFunc(obj interface{}) (interface{}, error) {
-	key, err := keyFunc(obj)
-	if err != nil {
-		return "", fmt.Errorf("could not get key for object %+v: %v", obj, err)
-	}
-
-	return key, nil
+// Requeue - enqueues ns/name of the given api object in the task queue.
+func (t *TaskQueue) Requeue(key string, err error) {
+	glog.Errorf("Requeuing %v, err %v", key, err)
+	t.queue.Add(key)
 }
 
 // worker processes work in the queue through sync.
-func (t *taskQueue) worker() {
+func (t *TaskQueue) worker() {
 	for {
 		key, quit := t.queue.Get()
 		if quit {
 			close(t.workerDone)
 			return
 		}
-		glog.V(3).Infof("syncing %v", key)
-		if err := t.sync(key); err != nil {
-			glog.Warningf("requeuing %v, err %v", key, err)
-			t.queue.AddRateLimited(key)
-		} else {
-			t.queue.Forget(key)
-		}
-
+		glog.V(3).Infof("Syncing %v", key)
+		t.sync(key.(string))
 		t.queue.Done(key)
 	}
 }
 
 // Shutdown shuts down the work queue and waits for the worker to ACK
-func (t *taskQueue) shutdown() {
+func (t *TaskQueue) Shutdown() {
 	t.queue.ShutDown()
 	<-t.workerDone
 }
 
-// isShuttingDown returns if the method Shutdown was invoked
-func (t *taskQueue) isShuttingDown() bool {
-	return t.queue.ShuttingDown()
-}
-
 // NewTaskQueue creates a new task queue with the given sync function.
 // The sync function is called for every element inserted into the queue.
-func newTaskQueue(syncFn func(interface{}) error) *taskQueue {
-	return newCustomTaskQueue(syncFn, nil)
-}
-
-// newCustomTaskQueue
-func newCustomTaskQueue(syncFn func(interface{}) error, fn func(interface{}) (interface{}, error)) *taskQueue {
-	q := &taskQueue{
-		queue:      workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+func NewTaskQueue(syncFn func(string)) *TaskQueue {
+	return &TaskQueue{
+		queue:      workqueue.New(),
 		sync:       syncFn,
 		workerDone: make(chan struct{}),
-		fn:         fn,
 	}
-
-	if fn == nil {
-		q.fn = q.defaultKeyFunc
-	}
-
-	return q
 }

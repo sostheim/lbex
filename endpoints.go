@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"reflect"
+
 	"github.com/golang/glog"
 
 	"k8s.io/client-go/dynamic"
@@ -38,18 +40,17 @@ func newEndpointsListWatchController() *lwController {
 	lwc := lwController{
 		stopCh: make(chan struct{}),
 	}
-	lwc.queue = newTaskQueue(lwc.syncEndpoints)
 	return &lwc
 }
 
-func newEndpointsListWatchControllerForClient(client *dynamic.Client) *lwController {
+func newEndpointsListWatchControllerForClient(lbex *lbExController) *lwController {
 
 	lwc := newEndpointsListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := &cache.ListWatch{
-		ListFunc:  clientEndpointsListFunc(client, api.NamespaceAll),
-		WatchFunc: clientEndpointsWatchFunc(client, api.NamespaceAll),
+		ListFunc:  clientEndpointsListFunc(lbex.client, api.NamespaceAll),
+		WatchFunc: clientEndpointsWatchFunc(lbex.client, api.NamespaceAll),
 	}
 	eventHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    endpointCreated,
@@ -57,26 +58,37 @@ func newEndpointsListWatchControllerForClient(client *dynamic.Client) *lwControl
 		UpdateFunc: endpointUpdated,
 	}
 
-	lwc.store, lwc.controller = cache.NewInformer(listWatch, &api.Endpoints{}, resyncPeriod, eventHandler)
+	lbex.endpointStore, lwc.controller = cache.NewInformer(listWatch, &api.Endpoints{}, resyncPeriod, eventHandler)
 
 	return lwc
 }
 
-func newEndpointsListWatchControllerForClientset(clientset *kubernetes.Clientset) *lwController {
+func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwController {
 
 	lwc := newEndpointsListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := cache.NewListWatchFromClient(
-		clientset.Core().RESTClient(), "endpoints", api.NamespaceAll, fields.Everything())
+		lbex.clientset.Core().RESTClient(), "endpoints", api.NamespaceAll, fields.Everything())
 
 	eventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    endpointCreated,
-		DeleteFunc: endpointDeleted,
-		UpdateFunc: endpointUpdated,
+		//AddFunc:    endpointCreated,
+		//DeleteFunc: endpointDeleted,
+		//UpdateFunc: endpointUpdated,
+		AddFunc: func(obj interface{}) {
+			lbex.queue.Enqueue(obj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			lbex.queue.Enqueue(obj)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			if !reflect.DeepEqual(old, cur) {
+				lbex.queue.Enqueue(cur)
+			}
+		},
 	}
 
-	lwc.store, lwc.controller = cache.NewInformer(listWatch, &v1.Endpoints{}, resyncPeriod, eventHandler)
+	lbex.endpointStore, lwc.controller = cache.NewInformer(listWatch, &v1.Endpoints{}, resyncPeriod, eventHandler)
 
 	return lwc
 }
@@ -126,20 +138,5 @@ func clientsetEndpointsListFunc(client *kubernetes.Clientset, namespace string) 
 func clientsetEndpointsWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
 	return func(options v1.ListOptions) (watch.Interface, error) {
 		return client.CoreV1().Endpoints(namespace).Watch(options)
-	}
-}
-
-func (lwc *lwController) syncEndpoints(key string) {
-	//glog.V(3).Infof("Syncing endpoints %v", key)
-
-	obj, exists, err := lwc.store.GetByKey(key)
-	if err != nil {
-		lwc.queue.requeue(key, err)
-		return
-	}
-	if !exists {
-		glog.V(3).Infof("Unable to find endpoint for key value: %s", key)
-	} else {
-		glog.V(3).Infof("Updating Endpoint for %v", obj)
 	}
 }
