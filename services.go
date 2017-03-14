@@ -17,15 +17,14 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
-	"log"
-	"time"
-
 	"github.com/golang/glog"
 
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/unversioned"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/fields"
 	"k8s.io/client-go/pkg/runtime"
 	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -35,18 +34,22 @@ var (
 	svcApiResource = unversioned.APIResource{Name: "services", Namespaced: true, Kind: "service"}
 )
 
+func newServicesListWatchController() *lwController {
+	lwc := lwController{
+		stopCh: make(chan struct{}),
+	}
+	lwc.queue = newTaskQueue(lwc.syncServices)
+	return &lwc
+}
+
 func newServicesListWatchControllerForClient(client *dynamic.Client) *lwController {
 
-	resyncPeriod := 30 * time.Second
+	lwc := newServicesListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := &cache.ListWatch{
-		ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-			return client.Resource(&svcApiResource, api.NamespaceAll).List(&options)
-		},
-		WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-			return client.Resource(&svcApiResource, api.NamespaceAll).Watch(&options)
-		},
+		ListFunc:  clientServicesListFunc(client, api.NamespaceAll),
+		WatchFunc: clientServicesWatchFunc(client, api.NamespaceAll),
 	}
 	eventHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc:    serviceCreated,
@@ -54,20 +57,28 @@ func newServicesListWatchControllerForClient(client *dynamic.Client) *lwControll
 		DeleteFunc: serviceDeleted,
 	}
 
-	lwc := lwController{
-		stopCh: make(chan struct{}),
+	lwc.store, lwc.controller = cache.NewInformer(listWatch, &api.Service{}, resyncPeriod, eventHandlers)
+
+	return lwc
+}
+
+func newServicesListWatchControllerForClientset(clientset *kubernetes.Clientset) *lwController {
+
+	lwc := newServicesListWatchController()
+
+	//Setup an informer to call functions when the watchlist changes
+	listWatch := cache.NewListWatchFromClient(
+		clientset.Core().RESTClient(), "services", api.NamespaceAll, fields.Everything())
+
+	eventHandler := cache.ResourceEventHandlerFuncs{
+		AddFunc:    serviceCreated,
+		DeleteFunc: serviceDeleted,
+		UpdateFunc: serviceUpdated,
 	}
 
-	lwc.queue = newTaskQueue(lwc.syncServices)
+	lwc.store, lwc.controller = cache.NewInformer(listWatch, &v1.Service{}, resyncPeriod, eventHandler)
 
-	lwc.store, lwc.controller = cache.NewInformer(
-		listWatch,
-		&api.Service{},
-		resyncPeriod,
-		eventHandlers,
-	)
-
-	return &lwc
+	return lwc
 }
 
 func serviceCreated(obj interface{}) {
@@ -94,6 +105,30 @@ func serviceUpdated(obj, newObj interface{}) {
 	}
 }
 
+func clientServicesListFunc(client *dynamic.Client, namespace string) func(api.ListOptions) (runtime.Object, error) {
+	return func(options api.ListOptions) (runtime.Object, error) {
+		return client.Resource(&svcApiResource, api.NamespaceAll).List(&options)
+	}
+}
+
+func clientServicesWatchFunc(client *dynamic.Client, namespace string) func(options api.ListOptions) (watch.Interface, error) {
+	return func(options api.ListOptions) (watch.Interface, error) {
+		return client.Resource(&svcApiResource, api.NamespaceAll).Watch(&options)
+	}
+}
+
+func clientsetServicesListFunc(client *kubernetes.Clientset, namespace string) func(v1.ListOptions) (runtime.Object, error) {
+	return func(options v1.ListOptions) (runtime.Object, error) {
+		return client.CoreV1().Endpoints(namespace).List(options)
+	}
+}
+
+func clientsetServicesWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
+	return func(options v1.ListOptions) (watch.Interface, error) {
+		return client.CoreV1().Endpoints(namespace).Watch(options)
+	}
+}
+
 func (lwc *lwController) syncServices(key string) {
 	//glog.V(3).Infof("Syncing services %v", key)
 
@@ -103,8 +138,8 @@ func (lwc *lwController) syncServices(key string) {
 		return
 	}
 	if !exists {
-		log.Print(fmt.Sprintf("Unable to find services for key value: %s", key))
+		glog.V(3).Infof("Unable to find services for key value: %s", key)
 	} else {
-		log.Print(fmt.Sprintf("Updating Services for %v", obj))
+		glog.V(3).Infof("Updating Services for %v", obj)
 	}
 }

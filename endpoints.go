@@ -17,15 +17,14 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
-	"log"
-	"time"
-
 	"github.com/golang/glog"
 
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/unversioned"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/fields"
 	"k8s.io/client-go/pkg/runtime"
 	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -35,17 +34,22 @@ var (
 	epApiResource = unversioned.APIResource{Name: "endpoints", Namespaced: true, Kind: "endpoint"}
 )
 
-func newEndpointListWatchControllerForClient(client *dynamic.Client) *lwController {
-	resyncPeriod := 30 * time.Second
+func newEndpointsListWatchController() *lwController {
+	lwc := lwController{
+		stopCh: make(chan struct{}),
+	}
+	lwc.queue = newTaskQueue(lwc.syncEndpoints)
+	return &lwc
+}
+
+func newEndpointsListWatchControllerForClient(client *dynamic.Client) *lwController {
+
+	lwc := newEndpointsListWatchController()
 
 	//Setup an informer to call functions when the watchlist changes
 	listWatch := &cache.ListWatch{
-		ListFunc: func(options api.ListOptions) (runtime.Object, error) {
-			return client.Resource(&epApiResource, api.NamespaceAll).List(&options)
-		},
-		WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
-			return client.Resource(&epApiResource, api.NamespaceAll).Watch(&options)
-		},
+		ListFunc:  clientEndpointsListFunc(client, api.NamespaceAll),
+		WatchFunc: clientEndpointsWatchFunc(client, api.NamespaceAll),
 	}
 	eventHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    endpointCreated,
@@ -53,20 +57,28 @@ func newEndpointListWatchControllerForClient(client *dynamic.Client) *lwControll
 		UpdateFunc: endpointUpdated,
 	}
 
-	lwc := lwController{
-		stopCh: make(chan struct{}),
+	lwc.store, lwc.controller = cache.NewInformer(listWatch, &api.Endpoints{}, resyncPeriod, eventHandler)
+
+	return lwc
+}
+
+func newEndpointsListWatchControllerForClientset(clientset *kubernetes.Clientset) *lwController {
+
+	lwc := newEndpointsListWatchController()
+
+	//Setup an informer to call functions when the watchlist changes
+	listWatch := cache.NewListWatchFromClient(
+		clientset.Core().RESTClient(), "endpoints", api.NamespaceAll, fields.Everything())
+
+	eventHandler := cache.ResourceEventHandlerFuncs{
+		AddFunc:    endpointCreated,
+		DeleteFunc: endpointDeleted,
+		UpdateFunc: endpointUpdated,
 	}
 
-	lwc.queue = newTaskQueue(lwc.syncEndpoints)
+	lwc.store, lwc.controller = cache.NewInformer(listWatch, &v1.Endpoints{}, resyncPeriod, eventHandler)
 
-	lwc.store, lwc.controller = cache.NewInformer(
-		listWatch,
-		&api.Endpoints{},
-		resyncPeriod,
-		eventHandler,
-	)
-
-	return &lwc
+	return lwc
 }
 
 func endpointCreated(obj interface{}) {
@@ -93,6 +105,30 @@ func endpointUpdated(obj, newObj interface{}) {
 	}
 }
 
+func clientEndpointsListFunc(client *dynamic.Client, namespace string) func(api.ListOptions) (runtime.Object, error) {
+	return func(options api.ListOptions) (runtime.Object, error) {
+		return client.Resource(&epApiResource, api.NamespaceAll).List(&options)
+	}
+}
+
+func clientEndpointsWatchFunc(client *dynamic.Client, namespace string) func(options api.ListOptions) (watch.Interface, error) {
+	return func(options api.ListOptions) (watch.Interface, error) {
+		return client.Resource(&epApiResource, api.NamespaceAll).Watch(&options)
+	}
+}
+
+func clientsetEndpointsListFunc(client *kubernetes.Clientset, namespace string) func(v1.ListOptions) (runtime.Object, error) {
+	return func(options v1.ListOptions) (runtime.Object, error) {
+		return client.CoreV1().Endpoints(namespace).List(options)
+	}
+}
+
+func clientsetEndpointsWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
+	return func(options v1.ListOptions) (watch.Interface, error) {
+		return client.CoreV1().Endpoints(namespace).Watch(options)
+	}
+}
+
 func (lwc *lwController) syncEndpoints(key string) {
 	//glog.V(3).Infof("Syncing endpoints %v", key)
 
@@ -102,8 +138,8 @@ func (lwc *lwController) syncEndpoints(key string) {
 		return
 	}
 	if !exists {
-		log.Print(fmt.Sprintf("Unable to find endpoint for key value: %s", key))
+		glog.V(3).Infof("Unable to find endpoint for key value: %s", key)
 	} else {
-		log.Print(fmt.Sprintf("Updating Endpoint for %v", obj))
+		glog.V(3).Infof("Updating Endpoint for %v", obj)
 	}
 }

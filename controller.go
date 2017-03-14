@@ -33,7 +33,8 @@ import (
 )
 
 var (
-	flags = pflag.NewFlagSet("", pflag.ExitOnError)
+	resyncPeriod = 30 * time.Second
+	flags        = pflag.NewFlagSet("", pflag.ExitOnError)
 )
 
 // List Watch (lw) Controller (lwc)
@@ -62,8 +63,8 @@ func init() {
 
 func startListWatches(lbex *lbExController) {
 
-	lbex.servciesLWC = newServicesListWatchControllerForClient(lbex.client)
-	lbex.endpointsLWC = newEndpointListWatchControllerForClient(lbex.client)
+	lbex.servciesLWC = newServicesListWatchControllerForClientset(lbex.clientset)
+	lbex.endpointsLWC = newEndpointsListWatchControllerForClientset(lbex.clientset)
 
 	// run the controller goroutines
 	go lbex.servciesLWC.controller.Run(wait.NeverStop)
