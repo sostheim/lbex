@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	epApiResource = unversioned.APIResource{Name: "endpoints", Namespaced: true, Kind: "endpoint"}
+	epAPIResource = unversioned.APIResource{Name: "endpoints", Namespaced: true, Kind: "endpoint"}
 )
 
 func newEndpointsListWatchController() *lwController {
@@ -119,13 +119,13 @@ func endpointUpdated(obj, newObj interface{}) {
 
 func clientEndpointsListFunc(client *dynamic.Client, namespace string) func(api.ListOptions) (runtime.Object, error) {
 	return func(options api.ListOptions) (runtime.Object, error) {
-		return client.Resource(&epApiResource, api.NamespaceAll).List(&options)
+		return client.Resource(&epAPIResource, api.NamespaceAll).List(&options)
 	}
 }
 
 func clientEndpointsWatchFunc(client *dynamic.Client, namespace string) func(options api.ListOptions) (watch.Interface, error) {
 	return func(options api.ListOptions) (watch.Interface, error) {
-		return client.Resource(&epApiResource, api.NamespaceAll).Watch(&options)
+		return client.Resource(&epAPIResource, api.NamespaceAll).Watch(&options)
 	}
 }
 

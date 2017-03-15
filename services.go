@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	svcApiResource = unversioned.APIResource{Name: "services", Namespaced: true, Kind: "service"}
+	svcAPIResource = unversioned.APIResource{Name: "services", Namespaced: true, Kind: "service"}
 )
 
 func newServicesListWatchController() *lwController {
@@ -119,13 +119,13 @@ func serviceUpdated(obj, newObj interface{}) {
 
 func clientServicesListFunc(client *dynamic.Client, namespace string) func(api.ListOptions) (runtime.Object, error) {
 	return func(options api.ListOptions) (runtime.Object, error) {
-		return client.Resource(&svcApiResource, api.NamespaceAll).List(&options)
+		return client.Resource(&svcAPIResource, api.NamespaceAll).List(&options)
 	}
 }
 
 func clientServicesWatchFunc(client *dynamic.Client, namespace string) func(options api.ListOptions) (watch.Interface, error) {
 	return func(options api.ListOptions) (watch.Interface, error) {
-		return client.Resource(&svcApiResource, api.NamespaceAll).Watch(&options)
+		return client.Resource(&svcAPIResource, api.NamespaceAll).Watch(&options)
 	}
 }
 

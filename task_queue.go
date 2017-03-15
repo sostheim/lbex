@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"k8s.io/client-go/pkg/util/wait"
@@ -26,7 +27,9 @@ import (
 	"github.com/golang/glog"
 )
 
-var keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
+var (
+	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
+)
 
 // TaskQueue manages a work queue through an independent worker that
 // invokes the given sync function for every work item inserted.
@@ -34,17 +37,26 @@ type TaskQueue struct {
 	// queue is the work queue the worker polls
 	queue *workqueue.Type
 	// sync is called for each item in the queue
-	sync func(string)
+	sync func(interface{}) error
 	// workerDone is closed when the worker exits
 	workerDone chan struct{}
+	// keyFn function (default if one is not supplied to New)
+	keyFn func(obj interface{}) (interface{}, error)
 }
 
-func (t *TaskQueue) run(period time.Duration, stopCh <-chan struct{}) {
+// Run ...
+func (t *TaskQueue) Run(period time.Duration, stopCh <-chan struct{}) {
 	wait.Until(t.worker, period, stopCh)
 }
 
 // Enqueue enqueues ns/name of the given api object in the task queue.
 func (t *TaskQueue) Enqueue(obj interface{}) {
+	if t.IsShuttingDown() {
+		glog.Errorf("queue has been shutdown, failed to enqueue: %v", obj)
+		return
+	}
+
+	glog.V(3).Infof("queuing item %v", obj)
 	key, err := keyFunc(obj)
 	if err != nil {
 		glog.V(3).Infof("Couldn't get key for object %+v: %v", obj, err)
@@ -55,7 +67,7 @@ func (t *TaskQueue) Enqueue(obj interface{}) {
 
 // Requeue - enqueues ns/name of the given api object in the task queue.
 func (t *TaskQueue) Requeue(key string, err error) {
-	glog.Errorf("Requeuing %v, err %v", key, err)
+	glog.Warningf("Requeuing %v, err %v", key, err)
 	t.queue.Add(key)
 }
 
@@ -68,9 +80,21 @@ func (t *TaskQueue) worker() {
 			return
 		}
 		glog.V(3).Infof("Syncing %v", key)
-		t.sync(key.(string))
+		// t.sync(key.(string))
+		keyValue, ok := key.(string)
+		if !ok {
+			glog.Warningf("Invalid key: %v", key)
+		}
+		if err := t.sync(keyValue); err != nil {
+			t.Requeue(keyValue, err)
+		}
 		t.queue.Done(key)
 	}
+}
+
+// IsShuttingDown returns if the method Shutdown was invoked
+func (t *TaskQueue) IsShuttingDown() bool {
+	return t.queue.ShuttingDown()
 }
 
 // Shutdown shuts down the work queue and waits for the worker to ACK
@@ -79,12 +103,36 @@ func (t *TaskQueue) Shutdown() {
 	<-t.workerDone
 }
 
+// default keyFn if a user func isn't supplied
+func (t *TaskQueue) defaultKeyFunc(obj interface{}) (interface{}, error) {
+	key, err := keyFunc(obj)
+	if err != nil {
+		return "", fmt.Errorf("could not get key for object %+v: %v", obj, err)
+	}
+
+	return key, nil
+}
+
 // NewTaskQueue creates a new task queue with the given sync function.
 // The sync function is called for every element inserted into the queue.
-func NewTaskQueue(syncFn func(string)) *TaskQueue {
-	return &TaskQueue{
+func NewTaskQueue(syncFn func(interface{}) error) *TaskQueue {
+	return NewTaskQueueKeyFn(syncFn, nil)
+}
+
+// NewTaskQueueKeyFn creates a new task queue with the given sync function and
+// API Object Key generator function.
+// The user's sync function is called for every element inserted into the queue.
+func NewTaskQueueKeyFn(syncFn func(interface{}) error, keyFn func(interface{}) (interface{}, error)) *TaskQueue {
+	taskQueue := &TaskQueue{
 		queue:      workqueue.New(),
 		sync:       syncFn,
 		workerDone: make(chan struct{}),
+		keyFn:      keyFn,
 	}
+
+	if taskQueue.keyFn == nil {
+		taskQueue.keyFn = taskQueue.defaultKeyFunc
+	}
+
+	return taskQueue
 }

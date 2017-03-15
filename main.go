@@ -50,7 +50,7 @@ func startListWatches(lbex *lbExController) {
 	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
 
-	go lbex.queue.run(5*time.Second, lbex.stopCh)
+	go lbex.queue.Run(5*time.Second, lbex.stopCh)
 }
 
 func main() {

@@ -62,15 +62,31 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset) 
 	return &lbexc
 }
 
-func (lbex *lbExController) sync(key string) {
+func (lbex *lbExController) sync(obj interface{}) error {
+
+	if lbex.queue.IsShuttingDown() {
+		return nil
+	}
+
+	key, ok := obj.(string)
+	if !ok {
+
+	}
+
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
-		return
-	}
-	if !exists {
-		glog.V(3).Infof("syncServices: unable to find services for key value: %s", key)
-	} else {
+		return err
+	} else if exists {
 		glog.V(3).Infof("syncServices: updating Services for %v", storeObj)
+	} else {
+		storeObj, exists, err = lbex.endpointStore.GetByKey(key)
+		if err != nil {
+			return err
+		} else if exists {
+			glog.V(3).Infof("syncServices: updating endpoints for %v", storeObj)
+		} else {
+			glog.V(3).Infof("syncServices: unable to find services or endpoint object for key value: %s", key)
+		}
 	}
-	return
+	return nil
 }
