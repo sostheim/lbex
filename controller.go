@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"time"
 
 	"github.com/golang/glog"
@@ -70,22 +71,24 @@ func (lbex *lbExController) sync(obj interface{}) error {
 
 	key, ok := obj.(string)
 	if !ok {
-
+		return errors.New("Invalid conversion from object any to string for key")
 	}
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
 		return err
 	} else if exists {
-		glog.V(3).Infof("syncServices: updating Services for %v", storeObj)
+		glog.V(3).Infof("sync: updating Services for key: %s", key)
+		glog.V(4).Infof("sync: updating Services Object %v", storeObj)
 	} else {
 		storeObj, exists, err = lbex.endpointStore.GetByKey(key)
 		if err != nil {
 			return err
 		} else if exists {
-			glog.V(3).Infof("syncServices: updating endpoints for %v", storeObj)
+			glog.V(3).Infof("sync: updating endpoints for key %s", key)
+			glog.V(4).Infof("sync: updating endpoint object %v", storeObj)
 		} else {
-			glog.V(3).Infof("syncServices: unable to find services or endpoint object for key value: %s", key)
+			glog.V(3).Infof("sync: unable to find services or endpoint object for key value: %s", key)
 		}
 	}
 	return nil

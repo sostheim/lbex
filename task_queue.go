@@ -56,18 +56,20 @@ func (t *TaskQueue) Enqueue(obj interface{}) {
 		return
 	}
 
-	glog.V(3).Infof("queuing item %v", obj)
 	key, err := keyFunc(obj)
 	if err != nil {
-		glog.V(3).Infof("Couldn't get key for object %+v: %v", obj, err)
+		glog.V(3).Infof("couldn't get key for object %+v: %v", obj, err)
 		return
 	}
+
+	glog.V(3).Infof("queuing: %s", key)
+	glog.V(4).Infof("key referenced obj: %v", obj)
 	t.queue.Add(key)
 }
 
 // Requeue - enqueues ns/name of the given api object in the task queue.
 func (t *TaskQueue) Requeue(key string, err error) {
-	glog.Warningf("Requeuing %v, err %v", key, err)
+	glog.Warningf("requeuing %v, err %v", key, err)
 	t.queue.Add(key)
 }
 
@@ -79,12 +81,13 @@ func (t *TaskQueue) worker() {
 			close(t.workerDone)
 			return
 		}
-		glog.V(3).Infof("Syncing %v", key)
-		// t.sync(key.(string))
+
 		keyValue, ok := key.(string)
 		if !ok {
-			glog.Warningf("Invalid key: %v", key)
+			glog.Warningf("invalid key: %v", key)
 		}
+
+		glog.V(3).Infof("syncing: %s", keyValue)
 		if err := t.sync(keyValue); err != nil {
 			t.Requeue(keyValue, err)
 		}
