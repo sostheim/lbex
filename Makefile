@@ -18,4 +18,8 @@ clean:
 	docker rmi -f $(PREFIX):$(TAG) || true
 	rm -f lbex
 
+osx: $(SRC)
+	CGO_ENABLED=0 GOOS=darwin go build -a -ldflags "-w" -o $@-lbex $(SRC)
+
+
 .PHONY: container push
