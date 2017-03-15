@@ -32,7 +32,8 @@ import (
 )
 
 var (
-	flags = pflag.NewFlagSet("", pflag.ExitOnError)
+	flags      = pflag.NewFlagSet("", pflag.ExitOnError)
+	kubeconfig = pflag.String("kubeconfig", "./config", "absolute path to the kubeconfig file")
 )
 
 func init() {
