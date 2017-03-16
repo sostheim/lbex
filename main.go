@@ -33,7 +33,8 @@ import (
 
 var (
 	flags      = pflag.NewFlagSet("", pflag.ExitOnError)
-	kubeconfig = pflag.String("kubeconfig", "./config", "absolute path to the kubeconfig file")
+	kubeconfig = flags.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	proxy      = flags.String("proxy", "", "kubctl proxy server running at the given url")
 )
 
 func init() {
@@ -54,15 +55,8 @@ func startListWatches(lbex *lbExController) {
 	go lbex.queue.Run(5*time.Second, lbex.stopCh)
 }
 
-func main() {
-
-	glog.V(3).Infof("lbex.main(): starting")
-
-	// Per https://github.com/kubernetes/kubernetes/issues/17162
-	// Supress goflag's warnings spewing to logs.
-	flags.AddGoFlagSet(flag.CommandLine)
-	flags.Parse(os.Args)
-	flag.CommandLine.Parse([]string{})
+func inCluster() *rest.Config {
+	glog.V(3).Infof("inCluster(): creating config")
 
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
@@ -73,8 +67,42 @@ func main() {
 		Group:   "",
 		Version: "v1",
 	}
+	return config
+}
 
-	glog.V(3).Infof("lbex.main(): created config")
+func external() *rest.Config {
+	glog.V(3).Infof("external(): creating config")
+	return nil
+}
+
+func byProxy() *rest.Config {
+	glog.V(3).Infof("byProxy(): creating config")
+	return &rest.Config{
+		Host: *proxy,
+	}
+}
+
+func main() {
+
+	glog.V(3).Infof("main(): starting")
+
+	// Per https://github.com/kubernetes/kubernetes/issues/17162
+	// Supress goflag's warnings spewing to logs.
+	flags.AddGoFlagSet(flag.CommandLine)
+	flags.Parse(os.Args)
+	flag.CommandLine.Parse([]string{})
+
+	var config *rest.Config
+	// creates the in-cluster config
+	if *proxy != "" {
+		config = byProxy()
+	} else if *kubeconfig != "" {
+		config = external()
+	} else {
+		config = inCluster()
+	}
+
+	glog.V(3).Infof("main(): created config")
 
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
@@ -88,12 +116,10 @@ func main() {
 		panic(err.Error())
 	}
 
-	glog.V(3).Infof("lbex.main(): created client")
-
 	// create external loadbalancer controller struct
 	lbex := newLbExController(client, clientset)
 
-	glog.V(3).Infof("lbex.main(): staring controllers")
+	glog.V(3).Infof("main(): staring controllers")
 
 	// services/endpoint controller
 	startListWatches(lbex)

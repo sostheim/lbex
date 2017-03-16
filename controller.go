@@ -78,9 +78,12 @@ func (lbex *lbExController) sync(obj interface{}) error {
 	if err != nil {
 		return err
 	} else if exists {
-		glog.V(3).Infof("sync: updating Services for key: %s", key)
-		glog.V(4).Infof("sync: updating Services Object %v", storeObj)
+		glog.V(3).Infof("sync: updating services for key: %s", key)
+		glog.V(4).Infof("sync: updating services object %v", storeObj)
 	} else {
+		// TODO: this check needs to be outside the else condition, or have a
+		// key that is guranteed to be unique from the service key.  Otherwise
+		// endpoint objects will never get processed.
 		storeObj, exists, err = lbex.endpointStore.GetByKey(key)
 		if err != nil {
 			return err
