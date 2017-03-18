@@ -17,12 +17,11 @@ limitations under the License.
 package main
 
 import (
-	"flag"
-	"os"
+	goflag "flag"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
+	flag "github.com/spf13/pflag"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -32,14 +31,11 @@ import (
 )
 
 var (
-	flags      = pflag.NewFlagSet("", pflag.ExitOnError)
-	kubeconfig = flags.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	proxy      = flags.String("proxy", "", "kubctl proxy server running at the given url")
+	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	proxy      = flag.String("proxy", "", "kubctl proxy server running at the given url")
 )
 
 func init() {
-	flag.Set("logtostderr", "true")
-	flag.Parse()
 	go wait.Until(glog.Flush, 10*time.Second, wait.NeverStop)
 }
 
@@ -63,7 +59,7 @@ func inCluster() *rest.Config {
 	if err != nil {
 		panic(err.Error())
 	}
-	config.GroupVersion = &unversioned.GroupVersion{
+	config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
 		Group:   "",
 		Version: "v1",
 	}
@@ -71,26 +67,39 @@ func inCluster() *rest.Config {
 }
 
 func external() *rest.Config {
-	glog.V(3).Infof("external(): creating config")
+	/*	glog.V(3).Infof("external(): creating config")
+		// uses the current context in kubeconfig
+		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+		if err != nil {
+			panic(err.Error())
+		}
+		config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
+			Group:   "",
+			Version: "v1",
+		}
+		return config*/
 	return nil
 }
 
 func byProxy() *rest.Config {
 	glog.V(3).Infof("byProxy(): creating config")
-	return &rest.Config{
+	rc := &rest.Config{
 		Host: *proxy,
 	}
+	rc.ContentConfig.GroupVersion = &unversioned.GroupVersion{
+		Group:   "",
+		Version: "v1",
+	}
+	return rc
 }
 
 func main() {
-
 	glog.V(3).Infof("main(): starting")
 
-	// Per https://github.com/kubernetes/kubernetes/issues/17162
-	// Supress goflag's warnings spewing to logs.
-	flags.AddGoFlagSet(flag.CommandLine)
-	flags.Parse(os.Args)
-	flag.CommandLine.Parse([]string{})
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	flag.Parse()
+
+	glog.V(3).Infof("main(): creating new config")
 
 	var config *rest.Config
 	// creates the in-cluster config
@@ -102,13 +111,15 @@ func main() {
 		config = inCluster()
 	}
 
-	glog.V(3).Infof("main(): created config")
+	glog.V(3).Infof("main(): create clientset from config")
 
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
+
+	glog.V(3).Infof("main(): create client from config")
 
 	// create dynamic client
 	client, err := dynamic.NewClient(config)

@@ -17,5 +17,5 @@ spec:
       containers:
       - name: lbex
         image: quay.io/samsung_cnct/lbex:latest
-        args: ["--v=3"]
+        args: ["--v=3", "--logtostderr=true"]
  
