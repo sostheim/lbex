@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/pkg/api/unversioned"
 	"k8s.io/client-go/pkg/util/wait"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -51,6 +52,13 @@ func startListWatches(lbex *lbExController) {
 	go lbex.queue.Run(5*time.Second, lbex.stopCh)
 }
 
+func addGV(config *rest.Config) {
+	config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
+		Group:   "",
+		Version: "v1",
+	}
+}
+
 func inCluster() *rest.Config {
 	glog.V(3).Infof("inCluster(): creating config")
 
@@ -59,26 +67,23 @@ func inCluster() *rest.Config {
 	if err != nil {
 		panic(err.Error())
 	}
-	config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
-		Group:   "",
-		Version: "v1",
-	}
 	return config
 }
 
 func external() *rest.Config {
 	glog.V(3).Infof("external(): creating config")
-	return nil
+	// uses the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	return config
 }
 
 func byProxy() *rest.Config {
 	glog.V(3).Infof("byProxy(): creating config")
 	rc := &rest.Config{
 		Host: *proxy,
-	}
-	rc.ContentConfig.GroupVersion = &unversioned.GroupVersion{
-		Group:   "",
-		Version: "v1",
 	}
 	return rc
 }
@@ -102,6 +107,8 @@ func main() {
 	}
 
 	glog.V(3).Infof("main(): create clientset from config")
+
+	addGV(config)
 
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
