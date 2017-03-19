@@ -37,10 +37,9 @@ var (
 )
 
 func newEndpointsListWatchController() *lwController {
-	lwc := lwController{
+	return &lwController{
 		stopCh: make(chan struct{}),
 	}
-	return &lwc
 }
 
 func newEndpointsListWatchControllerForClient(lbex *lbExController) *lwController {
@@ -53,9 +52,9 @@ func newEndpointsListWatchControllerForClient(lbex *lbExController) *lwControlle
 		WatchFunc: clientEndpointsWatchFunc(lbex.client, api.NamespaceAll),
 	}
 	eventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    endpointCreated,
-		DeleteFunc: endpointDeleted,
-		UpdateFunc: endpointUpdated,
+		AddFunc:    endpointCreatedFunc(lbex),
+		DeleteFunc: endpointDeletedFunc(lbex),
+		UpdateFunc: endpointUpdatedFunc(lbex),
 	}
 
 	lbex.endpointStore, lwc.controller = cache.NewInformer(listWatch, &api.Endpoints{}, resyncPeriod, eventHandler)
@@ -72,23 +71,9 @@ func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwContro
 		lbex.clientset.Core().RESTClient(), "endpoints", api.NamespaceAll, fields.Everything())
 
 	eventHandler := cache.ResourceEventHandlerFuncs{
-		//AddFunc:    endpointCreated,
-		//DeleteFunc: endpointDeleted,
-		//UpdateFunc: endpointUpdated,
-		AddFunc: func(obj interface{}) {
-			glog.V(3).Infof("AddFunc: enqueuing endpoint object")
-			lbex.queue.Enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			glog.V(3).Infof("DeleteFunc: enqueuing endpoint object")
-			lbex.queue.Enqueue(obj)
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				glog.V(3).Infof("UpdateFunc: enqueuing unequal endpoint object")
-				lbex.queue.Enqueue(cur)
-			}
-		},
+		AddFunc:    endpointCreatedFunc(lbex),
+		DeleteFunc: endpointDeletedFunc(lbex),
+		UpdateFunc: endpointUpdatedFunc(lbex),
 	}
 
 	lbex.endpointStore, lwc.controller = cache.NewInformer(listWatch, &v1.Endpoints{}, resyncPeriod, eventHandler)
@@ -96,27 +81,26 @@ func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwContro
 	return lwc
 }
 
-func endpointCreated(obj interface{}) {
-	if endpoint, ok := obj.(*api.Endpoints); ok {
-		glog.V(3).Infof("Endpoint created: " + endpoint.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("endpointCreated: obj interface{} not of type api.Endpoint")
+func endpointCreatedFunc(lbex *lbExController) func(obj interface{}) {
+	return func(obj interface{}) {
+		glog.V(3).Infof("AddFunc: enqueuing endpoint object")
+		lbex.queue.Enqueue(obj)
 	}
 }
 
-func endpointDeleted(obj interface{}) {
-	if endpoint, ok := obj.(*api.Endpoints); ok {
-		glog.V(3).Infof("Endpoint deleted: " + endpoint.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("endpointDeleted: obj interface{} not of type api.Endpoint")
+func endpointDeletedFunc(lbex *lbExController) func(obj interface{}) {
+	return func(obj interface{}) {
+		glog.V(3).Infof("DeleteFunc: enqueuing endpoint object")
+		lbex.queue.Enqueue(obj)
 	}
 }
 
-func endpointUpdated(obj, newObj interface{}) {
-	if endpoint, ok := obj.(*api.Endpoints); ok {
-		glog.V(3).Infof("Endpoint updated: " + endpoint.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("endpointUpdated: obj interface{} not of type api.Endpoint")
+func endpointUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
+	return func(obj, newObj interface{}) {
+		if !reflect.DeepEqual(obj, newObj) {
+			glog.V(3).Infof("UpdateFunc: enqueuing unequal endpoint object")
+			lbex.queue.Enqueue(newObj)
+		}
 	}
 }
 

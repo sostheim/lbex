@@ -60,6 +60,9 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset) 
 		stopCh:    make(chan struct{}),
 	}
 	lbexc.queue = NewTaskQueue(lbexc.sync)
+	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
+	lbexc.endpointsLWC = newEndpointsListWatchControllerForClientset(&lbexc)
+
 	return &lbexc
 }
 

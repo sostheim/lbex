@@ -37,10 +37,9 @@ var (
 )
 
 func newServicesListWatchController() *lwController {
-	lwc := lwController{
+	return &lwController{
 		stopCh: make(chan struct{}),
 	}
-	return &lwc
 }
 
 func newServicesListWatchControllerForClient(lbex *lbExController) *lwController {
@@ -53,9 +52,9 @@ func newServicesListWatchControllerForClient(lbex *lbExController) *lwController
 		WatchFunc: clientServicesWatchFunc(lbex.client, api.NamespaceAll),
 	}
 	eventHandlers := cache.ResourceEventHandlerFuncs{
-		AddFunc:    serviceCreated,
-		UpdateFunc: serviceUpdated,
-		DeleteFunc: serviceDeleted,
+		AddFunc:    serviceCreatedFunc(lbex),
+		UpdateFunc: serviceUpdatedFunc(lbex),
+		DeleteFunc: serviceDeletedFunc(lbex),
 	}
 
 	lbex.servicesStore, lwc.controller = cache.NewInformer(listWatch, &api.Service{}, resyncPeriod, eventHandlers)
@@ -72,23 +71,23 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 		lbex.clientset.Core().RESTClient(), "services", api.NamespaceAll, fields.Everything())
 
 	eventHandler := cache.ResourceEventHandlerFuncs{
-		//AddFunc:    serviceCreated,
-		//DeleteFunc: serviceDeleted,
-		//UpdateFunc: serviceUpdated,
-		AddFunc: func(obj interface{}) {
-			glog.V(3).Infof("AddFunc: enqueuing service object")
-			lbex.queue.Enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			glog.V(3).Infof("DeleteFunc: enqueuing service object")
-			lbex.queue.Enqueue(obj)
-		},
-		UpdateFunc: func(old, cur interface{}) {
-			if !reflect.DeepEqual(old, cur) {
-				glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
-				lbex.queue.Enqueue(cur)
-			}
-		},
+		AddFunc:    serviceCreatedFunc(lbex),
+		DeleteFunc: serviceDeletedFunc(lbex),
+		UpdateFunc: serviceUpdatedFunc(lbex),
+		/*	AddFunc: func(obj interface{}) {
+				glog.V(3).Infof("AddFunc: enqueuing service object")
+				lbex.queue.Enqueue(obj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				glog.V(3).Infof("DeleteFunc: enqueuing service object")
+				lbex.queue.Enqueue(obj)
+			},
+			UpdateFunc: func(old, cur interface{}) {
+				if !reflect.DeepEqual(old, cur) {
+					glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
+					lbex.queue.Enqueue(cur)
+				}
+			},*/
 	}
 
 	lbex.servicesStore, lwc.controller = cache.NewInformer(listWatch, &v1.Service{}, resyncPeriod, eventHandler)
@@ -96,27 +95,25 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 	return lwc
 }
 
-func serviceCreated(obj interface{}) {
-	if service, ok := obj.(*api.Service); ok {
-		glog.V(3).Infof("Service created: " + service.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("serviceCreate: obj interface{} not of type api.service")
+func serviceCreatedFunc(lbex *lbExController) func(obj interface{}) {
+	return func(obj interface{}) {
+		glog.V(3).Infof("AddFunc: enqueuing service object")
+		lbex.queue.Enqueue(obj)
 	}
 }
 
-func serviceDeleted(obj interface{}) {
-	if service, ok := obj.(*api.Service); ok {
-		glog.V(3).Infof("Service deleted: " + service.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("serviceDeleted: obj interface{} not of type api.service")
+func serviceDeletedFunc(lbex *lbExController) func(obj interface{}) {
+	return func(obj interface{}) {
+		glog.V(3).Infof("DeleteFunc: enqueuing service object")
+		lbex.queue.Enqueue(obj)
 	}
 }
-
-func serviceUpdated(obj, newObj interface{}) {
-	if service, ok := obj.(*api.Service); ok {
-		glog.V(3).Infof("Service updated: " + service.ObjectMeta.Name)
-	} else {
-		glog.V(3).Infof("serviceUpdated: obj interface{} not of type api.service")
+func serviceUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
+	return func(obj, newObj interface{}) {
+		if !reflect.DeepEqual(obj, newObj) {
+			glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
+			lbex.queue.Enqueue(newObj)
+		}
 	}
 }
 

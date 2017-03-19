@@ -41,14 +41,9 @@ func init() {
 }
 
 func startListWatches(lbex *lbExController) {
-
-	lbex.servciesLWC = newServicesListWatchControllerForClientset(lbex)
-	lbex.endpointsLWC = newEndpointsListWatchControllerForClientset(lbex)
-
-	// run the controller goroutines
+	// run the controller and queue goroutines
 	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
-
 	go lbex.queue.Run(5*time.Second, lbex.stopCh)
 }
 
@@ -96,8 +91,13 @@ func main() {
 
 	glog.V(3).Infof("main(): creating new config")
 
+	// creates the config, in preference order, for:
+	// 1 - the proxy URL, if present as an argument
+	// 2 - kubeconfig, if present as an arguemtn
+	// 3 - otherwise assume execution on an in-cluster node
+	//     note: this will fail with the appropriate error messages
+	//           if not actually executing on a node in the cluster.
 	var config *rest.Config
-	// creates the in-cluster config
 	if *proxy != "" {
 		config = byProxy()
 	} else if *kubeconfig != "" {
@@ -105,20 +105,17 @@ func main() {
 	} else {
 		config = inCluster()
 	}
-
-	glog.V(3).Infof("main(): create clientset from config")
-
 	addGV(config)
 
-	// creates the clientset
+	// creates a clientset
+	glog.V(3).Infof("main(): create clientset from config")
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
 
+	// create a (mostly unused but nice to have) dynamic client
 	glog.V(3).Infof("main(): create client from config")
-
-	// create dynamic client
 	client, err := dynamic.NewClient(config)
 	if err != nil {
 		panic(err.Error())
@@ -127,9 +124,8 @@ func main() {
 	// create external loadbalancer controller struct
 	lbex := newLbExController(client, clientset)
 
-	glog.V(3).Infof("main(): staring controllers")
-
 	// services/endpoint controller
+	glog.V(3).Infof("main(): staring controllers")
 	startListWatches(lbex)
 
 	for {

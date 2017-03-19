@@ -1,4 +1,4 @@
-all: push
+all: push osx
 
 VERSION = 0.1.0
 TAG = latest
@@ -21,6 +21,5 @@ clean:
 
 osx: $(SRC)
 	CGO_ENABLED=0 GOOS=darwin go build -a -ldflags "-w" -o $@-lbex $(SRC)
-
 
 .PHONY: container push
