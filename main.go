@@ -67,17 +67,7 @@ func inCluster() *rest.Config {
 }
 
 func external() *rest.Config {
-	/*	glog.V(3).Infof("external(): creating config")
-		// uses the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-		if err != nil {
-			panic(err.Error())
-		}
-		config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
-			Group:   "",
-			Version: "v1",
-		}
-		return config*/
+	glog.V(3).Infof("external(): creating config")
 	return nil
 }
 
