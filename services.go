@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -74,20 +75,6 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 		AddFunc:    serviceCreatedFunc(lbex),
 		DeleteFunc: serviceDeletedFunc(lbex),
 		UpdateFunc: serviceUpdatedFunc(lbex),
-		/*	AddFunc: func(obj interface{}) {
-				glog.V(3).Infof("AddFunc: enqueuing service object")
-				lbex.queue.Enqueue(obj)
-			},
-			DeleteFunc: func(obj interface{}) {
-				glog.V(3).Infof("DeleteFunc: enqueuing service object")
-				lbex.queue.Enqueue(obj)
-			},
-			UpdateFunc: func(old, cur interface{}) {
-				if !reflect.DeepEqual(old, cur) {
-					glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
-					lbex.queue.Enqueue(cur)
-				}
-			},*/
 	}
 
 	lbex.servicesStore, lwc.controller = cache.NewInformer(listWatch, &v1.Service{}, resyncPeriod, eventHandler)
@@ -139,4 +126,16 @@ func clientsetServicesWatchFunc(client *kubernetes.Clientset, namespace string) 
 	return func(options v1.ListOptions) (watch.Interface, error) {
 		return client.CoreV1().Endpoints(namespace).Watch(options)
 	}
+}
+
+// GetServiceEndpoints returns the endpoints for the specified service name / namesapce.
+func (lbex *lbExController) GetServiceEndpoints(service *api.Service) (endpoints api.Endpoints, err error) {
+	for _, svc := range lbex.servicesStore.List() {
+		endpoints = *svc.(*api.Endpoints)
+		if service.Name == endpoints.Name && service.Namespace == endpoints.Namespace {
+			return endpoints, nil
+		}
+	}
+	err = fmt.Errorf("could not find endpoints for service: %v", service.Name)
+	return
 }
