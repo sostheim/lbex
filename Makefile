@@ -1,7 +1,7 @@
 VERSION = 0.1.0
 TAG = latest
 PREFIX ?= quay.io/samsung_cnct/lbex
-SRC = services.go endpoints.go task_queue.go controller.go main.go
+SRC = service.go services.go endpoints.go task_queue.go controller.go main.go
 
 all: push osx-lbex
 

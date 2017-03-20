@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	proxy      = flag.String("proxy", "", "kubctl proxy server running at the given url")
+	kubeconfig  = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	proxy       = flag.String("proxy", "", "kubctl proxy server running at the given url")
+	serviceName = flag.String("service-name", "", `Proive LoadBalancing for the specified service.`)
 )
 
 func init() {
@@ -44,7 +45,7 @@ func startListWatches(lbex *lbExController) {
 	// run the controller and queue goroutines
 	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
-	go lbex.queue.Run(5*time.Second, lbex.stopCh)
+	go lbex.queue.Run(time.Second, lbex.stopCh)
 }
 
 func addGV(config *rest.Config) {
@@ -56,7 +57,6 @@ func addGV(config *rest.Config) {
 
 func inCluster() *rest.Config {
 	glog.V(3).Infof("inCluster(): creating config")
-
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -122,7 +122,7 @@ func main() {
 	}
 
 	// create external loadbalancer controller struct
-	lbex := newLbExController(client, clientset)
+	lbex := newLbExController(client, clientset, serviceName)
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")

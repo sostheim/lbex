@@ -18,17 +18,23 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"sort"
 	"time"
 
 	"github.com/golang/glog"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/util/intstr"
 	"k8s.io/client-go/tools/cache"
 )
 
 var (
-	resyncPeriod = 30 * time.Second
+	resyncPeriod        = 30 * time.Second
+	supportedAlgorithms = []string{"roundrobin", "leastconn"}
+	defaultAlgorithm    = string("roundrobin")
 )
 
 // List Watch (lw) Controller (lwc)
@@ -50,14 +56,18 @@ type lbExController struct {
 
 	stopCh chan struct{}
 	queue  *TaskQueue
+
+	// The service to provide load balancing for, or "all" if empty
+	service string
 }
 
-func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset) *lbExController {
+func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, service *string) *lbExController {
 	// create external loadbalancer controller struct
 	lbexc := lbExController{
 		client:    client,
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
+		service:   *service,
 	}
 	lbexc.queue = NewTaskQueue(lbexc.sync)
 	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
@@ -98,4 +108,95 @@ func (lbex *lbExController) sync(obj interface{}) error {
 		}
 	}
 	return nil
+}
+
+// getEndpoints returns a list of <endpoint ip>:<port> for a given service/target port combination.
+func (lbex *lbExController) getEndpoints(service *api.Service, servicePort *api.ServicePort) (endpoints []string) {
+	svcEndpoints, err := lbex.GetServiceEndpoints(service)
+	if err != nil {
+		return
+	}
+
+	// The intent here is to create a union of all subsets that match a targetPort.
+	// We know the endpoint already matches the service, so all pod ips that have
+	// the target port are capable of service traffic for it.
+	for _, subsets := range svcEndpoints.Subsets {
+		for _, epPort := range subsets.Ports {
+			var targetPort int
+			switch servicePort.TargetPort.Type {
+			case intstr.Int:
+				if epPort.Port == int32(getTargetPort(servicePort)) {
+					targetPort = int(epPort.Port)
+				}
+			case intstr.String:
+				if epPort.Name == servicePort.TargetPort.StrVal {
+					targetPort = int(epPort.Port)
+				}
+			}
+			if targetPort == 0 {
+				continue
+			}
+			for _, epAddress := range subsets.Addresses {
+				endpoints = append(endpoints, fmt.Sprintf("%v:%v", epAddress.IP, targetPort))
+			}
+		}
+	}
+	return
+}
+
+// getServices returns a list of services and their endpoints.
+func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []Service) {
+	ep := []string{}
+	objects := lbex.servicesStore.List()
+	for _, obj := range objects {
+		service, ok := obj.(*api.Service)
+		if !ok {
+			continue
+		}
+		if service.Spec.Type == api.ServiceTypeLoadBalancer {
+			glog.V(3).Infof("service: %s has type: LoadBalancer - skipping", service.Name)
+			continue
+		}
+		for _, servicePort := range service.Spec.Ports {
+			// TODO: headless services?
+			sName := service.Name
+			if lbex.service != "" && lbex.service != sName {
+				glog.Infof("Ignoring non-matching service: %s:%+d", sName, servicePort)
+				continue
+			}
+
+			ep = lbex.getEndpoints(service, &servicePort)
+			if len(ep) == 0 {
+				glog.Infof("No endpoints found for service %v, port %+v",
+					sName, servicePort)
+				continue
+			}
+			newSvc := Service{
+				Name:        getServiceNameForLBRule(service, int(servicePort.Port)),
+				Ep:          ep,
+				BackendPort: getTargetPort(&servicePort),
+			}
+
+			if val, ok := serviceAnnotations(service.ObjectMeta.Annotations).getHost(); ok {
+				newSvc.Host = val
+			}
+
+			if val, ok := serviceAnnotations(service.ObjectMeta.Annotations).getAlgorithm(); ok {
+				for _, current := range supportedAlgorithms {
+					if val == current {
+						newSvc.Algorithm = val
+						break
+					}
+				}
+			} else {
+				newSvc.Algorithm = defaultAlgorithm
+			}
+			glog.Infof("Found service: %+v", newSvc)
+		}
+	}
+
+	sort.Sort(serviceByName(tcpServices))
+	sort.Sort(serviceByName(udpServices))
+
+	return
 }
