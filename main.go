@@ -77,10 +77,9 @@ func external() *rest.Config {
 
 func byProxy() *rest.Config {
 	glog.V(3).Infof("byProxy(): creating config")
-	rc := &rest.Config{
+	return &rest.Config{
 		Host: *proxy,
 	}
-	return rc
 }
 
 func main() {
