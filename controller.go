@@ -110,9 +110,21 @@ func (lbex *lbExController) sync(obj interface{}) error {
 	return nil
 }
 
+// getServiceEndpoints returns the endpoints for the specified service name / namesapce.
+func (lbex *lbExController) getServiceEndpoints(service *api.Service) (endpoints api.Endpoints, err error) {
+	for _, svc := range lbex.servicesStore.List() {
+		endpoints = *svc.(*api.Endpoints)
+		if service.Name == endpoints.Name && service.Namespace == endpoints.Namespace {
+			return endpoints, nil
+		}
+	}
+	err = fmt.Errorf("could not find endpoints for service: %v", service.Name)
+	return
+}
+
 // getEndpoints returns a list of <endpoint ip>:<port> for a given service/target port combination.
 func (lbex *lbExController) getEndpoints(service *api.Service, servicePort *api.ServicePort) (endpoints []string) {
-	svcEndpoints, err := lbex.GetServiceEndpoints(service)
+	svcEndpoints, err := lbex.getServiceEndpoints(service)
 	if err != nil {
 		return
 	}
@@ -161,14 +173,13 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 			// TODO: headless services?
 			sName := service.Name
 			if lbex.service != "" && lbex.service != sName {
-				glog.Infof("Ignoring non-matching service: %s:%+d", sName, servicePort)
+				glog.V(3).Infof("Ignoring non-matching service: %s:%+d", sName, servicePort)
 				continue
 			}
 
 			ep = lbex.getEndpoints(service, &servicePort)
 			if len(ep) == 0 {
-				glog.Infof("No endpoints found for service %v, port %+v",
-					sName, servicePort)
+				glog.V(3).Infof("No endpoints found for service %s, port %+d", sName, servicePort)
 				continue
 			}
 			newSvc := Service{
@@ -191,7 +202,15 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 			} else {
 				newSvc.Algorithm = defaultAlgorithm
 			}
-			glog.Infof("Found service: %+v", newSvc)
+			newSvc.FrontendPort = int(servicePort.Port)
+
+			if servicePort.Protocol == api.ProtocolUDP {
+				udpServices = append(udpServices, newSvc)
+			} else {
+				tcpServices = append(tcpServices, newSvc)
+			}
+
+			glog.V(3).Infof("Found service: %+v", newSvc)
 		}
 	}
 
