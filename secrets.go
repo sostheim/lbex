@@ -46,7 +46,7 @@ func newSecretsListWatchControllerForClient(lbex *lbExController) *lwController 
 
 	lwc := newSecretsListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the NewListWatchFromClient changes
 	listWatch := &cache.ListWatch{
 		ListFunc:  clientSecretsListFunc(lbex.client, api.NamespaceAll),
 		WatchFunc: clientSecretsWatchFunc(lbex.client, api.NamespaceAll),
@@ -56,8 +56,8 @@ func newSecretsListWatchControllerForClient(lbex *lbExController) *lwController 
 		UpdateFunc: secretUpdatedFunc(lbex),
 		DeleteFunc: secretDeletedFunc(lbex),
 	}
-
-	lbex.secretsStore, lwc.controller = cache.NewInformer(listWatch, &api.Secret{}, resyncPeriod, eventHandlers)
+	// TODO: _ -> must be replaced by a cache.Store if we ever want to use this data.
+	_, lwc.controller = cache.NewInformer(listWatch, &api.Secret{}, resyncPeriod, eventHandlers)
 
 	return lwc
 }
@@ -66,7 +66,7 @@ func newSecretsListWatchControllerForClientset(lbex *lbExController) *lwControll
 
 	lwc := newSecretsListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the ListWatch changes
 	listWatch := cache.NewListWatchFromClient(
 		lbex.clientset.Core().RESTClient(), "secrets", api.NamespaceAll, fields.Everything())
 
@@ -75,8 +75,8 @@ func newSecretsListWatchControllerForClientset(lbex *lbExController) *lwControll
 		DeleteFunc: secretDeletedFunc(lbex),
 		UpdateFunc: secretUpdatedFunc(lbex),
 	}
-
-	lbex.secretsStore, lwc.controller = cache.NewInformer(listWatch, &v1.Secret{}, resyncPeriod, eventHandler)
+	// TODO: _ -> must be replaced by a cache.Store if we ever want to use this data.
+	_, lwc.controller = cache.NewInformer(listWatch, &v1.Secret{}, resyncPeriod, eventHandler)
 
 	return lwc
 }
