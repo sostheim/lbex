@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -126,16 +125,4 @@ func clientsetServicesWatchFunc(client *kubernetes.Clientset, namespace string) 
 	return func(options v1.ListOptions) (watch.Interface, error) {
 		return client.CoreV1().Endpoints(namespace).Watch(options)
 	}
-}
-
-// GetServiceEndpoints returns the endpoints for the specified service name / namesapce.
-func (lbex *lbExController) GetServiceEndpoints(service *api.Service) (endpoints api.Endpoints, err error) {
-	for _, svc := range lbex.servicesStore.List() {
-		endpoints = *svc.(*api.Endpoints)
-		if service.Name == endpoints.Name && service.Namespace == endpoints.Namespace {
-			return endpoints, nil
-		}
-	}
-	err = fmt.Errorf("could not find endpoints for service: %v", service.Name)
-	return
 }
