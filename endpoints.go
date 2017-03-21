@@ -46,7 +46,7 @@ func newEndpointsListWatchControllerForClient(lbex *lbExController) *lwControlle
 
 	lwc := newEndpointsListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the ListWatch changes
 	listWatch := &cache.ListWatch{
 		ListFunc:  clientEndpointsListFunc(lbex.client, api.NamespaceAll),
 		WatchFunc: clientEndpointsWatchFunc(lbex.client, api.NamespaceAll),
@@ -66,7 +66,7 @@ func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwContro
 
 	lwc := newEndpointsListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the ListWatch changes
 	listWatch := cache.NewListWatchFromClient(
 		lbex.clientset.Core().RESTClient(), "endpoints", api.NamespaceAll, fields.Everything())
 

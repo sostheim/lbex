@@ -46,7 +46,7 @@ func newServicesListWatchControllerForClient(lbex *lbExController) *lwController
 
 	lwc := newServicesListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the ListWatch changes
 	listWatch := &cache.ListWatch{
 		ListFunc:  clientServicesListFunc(lbex.client, api.NamespaceAll),
 		WatchFunc: clientServicesWatchFunc(lbex.client, api.NamespaceAll),
@@ -66,7 +66,7 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 
 	lwc := newServicesListWatchController()
 
-	//Setup an informer to call functions when the watchlist changes
+	//Setup an informer to call functions when the ListWatch changes
 	listWatch := cache.NewListWatchFromClient(
 		lbex.clientset.Core().RESTClient(), "services", api.NamespaceAll, fields.Everything())
 
@@ -117,12 +117,12 @@ func clientServicesWatchFunc(client *dynamic.Client, namespace string) func(opti
 
 func clientsetServicesListFunc(client *kubernetes.Clientset, namespace string) func(v1.ListOptions) (runtime.Object, error) {
 	return func(options v1.ListOptions) (runtime.Object, error) {
-		return client.CoreV1().Endpoints(namespace).List(options)
+		return client.CoreV1().Services(namespace).List(options)
 	}
 }
 
 func clientsetServicesWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
 	return func(options v1.ListOptions) (watch.Interface, error) {
-		return client.CoreV1().Endpoints(namespace).Watch(options)
+		return client.CoreV1().Services(namespace).Watch(options)
 	}
 }
