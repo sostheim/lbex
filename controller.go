@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/sostheim/lbex/annotations"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -173,7 +174,12 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 			// TODO: headless services?
 			sName := service.Name
 			if lbex.service != "" && lbex.service != sName {
-				glog.V(3).Infof("Ignoring non-matching service: %s:%+d", sName, servicePort)
+				glog.V(3).Infof("Ignoring non-matching service name: %s:%+d", sName, servicePort)
+				continue
+			}
+
+			if !annotations.IsValid(service) {
+				glog.V(3).Infof("Ignoring non-matching service loadbalancer.class: %s:%+d", sName, servicePort)
 				continue
 			}
 
@@ -188,11 +194,11 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 				BackendPort: getTargetPort(&servicePort),
 			}
 
-			if val, ok := serviceAnnotations(service.ObjectMeta.Annotations).getHost(); ok {
+			if val, ok := annotations.GetHost(service); ok {
 				newSvc.Host = val
 			}
 
-			if val, ok := serviceAnnotations(service.ObjectMeta.Annotations).getAlgorithm(); ok {
+			if val, ok := annotations.GetAlgorithm(service); ok {
 				for _, current := range supportedAlgorithms {
 					if val == current {
 						newSvc.Algorithm = val

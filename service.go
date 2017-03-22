@@ -23,9 +23,7 @@ import (
 )
 
 var (
-	lbAPIPort      = 8081
-	lbAlgorithmKey = "lbex/lb.algorithm"
-	lbHostKey      = "lbex/lb.host"
+	lbAPIPort = 8081
 )
 
 // getTargetPort returns the numeric value of TargetPort
@@ -74,16 +72,4 @@ func (s serviceByName) Swap(i, j int) {
 }
 func (s serviceByName) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
-}
-
-type serviceAnnotations map[string]string
-
-func (s serviceAnnotations) getAlgorithm() (string, bool) {
-	val, ok := s[lbAlgorithmKey]
-	return val, ok
-}
-
-func (s serviceAnnotations) getHost() (string, bool) {
-	val, ok := s[lbHostKey]
-	return val, ok
 }
