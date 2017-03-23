@@ -84,14 +84,14 @@ func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwContro
 func endpointCreatedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("AddFunc: enqueuing endpoint object")
-		lbex.queue.Enqueue(obj)
+		lbex.endpointsQueue.Enqueue(obj)
 	}
 }
 
 func endpointDeletedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("DeleteFunc: enqueuing endpoint object")
-		lbex.queue.Enqueue(obj)
+		lbex.endpointsQueue.Enqueue(obj)
 	}
 }
 
@@ -99,7 +99,7 @@ func endpointUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 	return func(obj, newObj interface{}) {
 		if !reflect.DeepEqual(obj, newObj) {
 			glog.V(3).Infof("UpdateFunc: enqueuing unequal endpoint object")
-			lbex.queue.Enqueue(newObj)
+			lbex.endpointsQueue.Enqueue(newObj)
 		}
 	}
 }

@@ -84,21 +84,21 @@ func newSecretsListWatchControllerForClientset(lbex *lbExController) *lwControll
 func secretCreatedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("AddFunc: enqueuing secret object")
-		lbex.queue.Enqueue(obj)
+		// TODO: lbex.secretsQueue.Enqueue(obj)
 	}
 }
 
 func secretDeletedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("DeleteFunc: enqueuing secret object")
-		lbex.queue.Enqueue(obj)
+		// TODO: lbex.secretsQueue.Enqueue(obj)
 	}
 }
 func secretUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 	return func(obj, newObj interface{}) {
 		if !reflect.DeepEqual(obj, newObj) {
 			glog.V(3).Infof("UpdateFunc: enqueuing unequal secret object")
-			lbex.queue.Enqueue(newObj)
+			// TODO: lbex.secretsQueue.Enqueue(newObj)
 		}
 	}
 }

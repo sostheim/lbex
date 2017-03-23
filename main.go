@@ -45,7 +45,8 @@ func startListWatches(lbex *lbExController) {
 	// run the controller and queue goroutines
 	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
-	go lbex.queue.Run(time.Second, lbex.stopCh)
+	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
+	go lbex.endpointsQueue.Run(time.Second, lbex.stopCh)
 }
 
 func addGV(config *rest.Config) {

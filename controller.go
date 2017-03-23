@@ -49,14 +49,15 @@ type lbExController struct {
 	client    *dynamic.Client
 	clientset *kubernetes.Clientset
 
-	endpointsLWC  *lwController
-	endpointStore cache.Store
+	endpointsLWC   *lwController
+	endpointStore  cache.Store
+	endpointsQueue *TaskQueue
 
 	servciesLWC   *lwController
 	servicesStore cache.Store
+	servicesQueue *TaskQueue
 
 	stopCh chan struct{}
-	queue  *TaskQueue
 
 	// The service to provide load balancing for, or "all" if empty
 	service string
@@ -70,43 +71,56 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 		stopCh:    make(chan struct{}),
 		service:   *service,
 	}
-	lbexc.queue = NewTaskQueue(lbexc.sync)
+	lbexc.servicesQueue = NewTaskQueue(lbexc.syncServices)
 	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
+	lbexc.endpointsQueue = NewTaskQueue(lbexc.syncEndpoints)
 	lbexc.endpointsLWC = newEndpointsListWatchControllerForClientset(&lbexc)
 
 	return &lbexc
 }
 
-func (lbex *lbExController) sync(obj interface{}) error {
+func (lbex *lbExController) syncServices(obj interface{}) error {
 
-	if lbex.queue.IsShuttingDown() {
+	if lbex.servicesQueue.IsShuttingDown() {
 		return nil
 	}
 
 	key, ok := obj.(string)
 	if !ok {
-		return errors.New("Invalid conversion from object any to string for key")
+		return errors.New("syncServices: invalid conversion from object any to string for key")
 	}
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
 		return err
 	} else if exists {
-		glog.V(3).Infof("sync: updating services for key: %s", key)
-		glog.V(4).Infof("sync: updating services object %v", storeObj)
+		glog.V(3).Infof("syncServices: updating services for key: %s", key)
+		glog.V(4).Infof("syncServices: updating services object %v", storeObj)
 	} else {
-		// TODO: this check needs to be outside the else condition, or have a
-		// key that is guranteed to be unique from the service key.  Otherwise
-		// endpoint objects will never get processed.
-		storeObj, exists, err = lbex.endpointStore.GetByKey(key)
-		if err != nil {
-			return err
-		} else if exists {
-			glog.V(3).Infof("sync: updating endpoints for key %s", key)
-			glog.V(4).Infof("sync: updating endpoint object %v", storeObj)
-		} else {
-			glog.V(3).Infof("sync: unable to find services or endpoint object for key value: %s", key)
-		}
+		glog.V(3).Infof("syncEndpoints: unable to find service object for key value: %s", key)
+	}
+	return nil
+}
+
+func (lbex *lbExController) syncEndpoints(obj interface{}) error {
+
+	if lbex.endpointsQueue.IsShuttingDown() {
+		return nil
+	}
+
+	key, ok := obj.(string)
+	if !ok {
+		return errors.New("syncEndpoints: invalid conversion from object any to string for key")
+	}
+
+	storeObj, exists, err := lbex.endpointStore.GetByKey(key)
+	if err != nil {
+		return err
+	} else if exists {
+		glog.V(3).Infof("syncEndpoints: updating endpoints for key %s", key)
+		glog.V(4).Infof("syncEndpoints: updating endpoint object %v", storeObj)
+	} else {
+		glog.V(3).Infof("syncEndpoints: unable to find endpoint object for key value: %s", key)
 	}
 	return nil
 }

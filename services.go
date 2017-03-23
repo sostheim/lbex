@@ -84,21 +84,21 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 func serviceCreatedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("AddFunc: enqueuing service object")
-		lbex.queue.Enqueue(obj)
+		lbex.servicesQueue.Enqueue(obj)
 	}
 }
 
 func serviceDeletedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
 		glog.V(3).Infof("DeleteFunc: enqueuing service object")
-		lbex.queue.Enqueue(obj)
+		lbex.servicesQueue.Enqueue(obj)
 	}
 }
 func serviceUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 	return func(obj, newObj interface{}) {
 		if !reflect.DeepEqual(obj, newObj) {
 			glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
-			lbex.queue.Enqueue(newObj)
+			lbex.servicesQueue.Enqueue(newObj)
 		}
 	}
 }
