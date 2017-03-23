@@ -96,8 +96,14 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 	} else if exists {
 		glog.V(3).Infof("syncServices: updating services for key: %s", key)
 		glog.V(4).Infof("syncServices: updating services object %v", storeObj)
+		udpSvc, tcpSvc := lbex.getServices()
+		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
+			glog.V(3).Info("syncServices: no services currently match criteria")
+		} else {
+			glog.V(3).Infof("syncServices: triggering configuration event for\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
+		}
 	} else {
-		glog.V(3).Infof("syncEndpoints: unable to find service object for key value: %s", key)
+		glog.V(3).Infof("syncServices: unable to find cached service object for key value: %s", key)
 	}
 	return nil
 }
@@ -110,17 +116,27 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 
 	key, ok := obj.(string)
 	if !ok {
-		return errors.New("syncEndpoints: invalid conversion from object any to string for key")
+		return errors.New("syncEndpoints: invalid conversion from object any to key string")
 	}
 
 	storeObj, exists, err := lbex.endpointStore.GetByKey(key)
 	if err != nil {
 		return err
 	} else if exists {
+		endpoints, ok := storeObj.(*api.Endpoints)
+		if !ok || endpoints.Namespace == "kube-system" {
+			return nil
+		}
 		glog.V(3).Infof("syncEndpoints: updating endpoints for key %s", key)
 		glog.V(4).Infof("syncEndpoints: updating endpoint object %v", storeObj)
+		udpSvc, tcpSvc := lbex.getServices()
+		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
+			glog.V(3).Info("syncEndpoints: no services currently match criteria")
+		} else {
+			glog.V(3).Infof("syncEndpoints: triggering configuration event for\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
+		}
 	} else {
-		glog.V(3).Infof("syncEndpoints: unable to find endpoint object for key value: %s", key)
+		glog.V(3).Infof("syncEndpoints: unable to find cachd endpoint object for key value: %s", key)
 	}
 	return nil
 }
@@ -181,25 +197,24 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 			continue
 		}
 		if service.Spec.Type == api.ServiceTypeLoadBalancer {
-			glog.V(3).Infof("service: %s has type: LoadBalancer - skipping", service.Name)
+			glog.V(3).Infof("getServices: service: %s has type: LoadBalancer - skipping", service.Name)
 			continue
 		}
-		for _, servicePort := range service.Spec.Ports {
-			// TODO: headless services?
-			sName := service.Name
-			if lbex.service != "" && lbex.service != sName {
-				glog.V(3).Infof("Ignoring non-matching service name: %s:%+d", sName, servicePort)
-				continue
-			}
+		// Only services with the appropriate annotations are candidates
+		if !annotations.IsValid(service) {
+			glog.V(3).Infof("getServices: ignoring missing or non-matching loadbalancer.class: %s", service.Name)
+			continue
+		}
 
-			if !annotations.IsValid(service) {
-				glog.V(3).Infof("Ignoring non-matching service loadbalancer.class: %s:%+d", sName, servicePort)
+		for _, servicePort := range service.Spec.Ports {
+			if lbex.service != "" && lbex.service != service.Name {
+				glog.V(3).Infof("getServices: ignoring non-matching service name: %s:%+d", service.Name, servicePort)
 				continue
 			}
 
 			ep = lbex.getEndpoints(service, &servicePort)
 			if len(ep) == 0 {
-				glog.V(3).Infof("No endpoints found for service %s, port %+d", sName, servicePort)
+				glog.V(3).Infof("No endpoints found for service %s, port %+d", service.Name, servicePort)
 				continue
 			}
 			newSvc := Service{
