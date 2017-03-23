@@ -18,6 +18,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/golang/glog"
 
@@ -81,23 +82,47 @@ func newServicesListWatchControllerForClientset(lbex *lbExController) *lwControl
 	return lwc
 }
 
+func filterObject(obj interface{}) bool {
+	// obj can be filtered for either a: type conversion failure,
+	// b: namespace is 'kube-system/' - which we don't handle.
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		glog.V(5).Infof("filterObject: DeletionHandlingMetaNamespaceKeyFunc(): err: %v", err)
+		return true
+	}
+	glog.V(5).Infof("filterObject: return %s has prefix 'kube-system/'", key)
+	return strings.HasPrefix(key, "kube-system/")
+}
+
 func serviceCreatedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
-		glog.V(3).Infof("AddFunc: enqueuing service object")
+		if filterObject(obj) {
+			glog.V(5).Infof("AddFunc: filtering out service object")
+			return
+		}
+		glog.V(5).Infof("AddFunc: enqueuing service object")
 		lbex.servicesQueue.Enqueue(obj)
 	}
 }
 
 func serviceDeletedFunc(lbex *lbExController) func(obj interface{}) {
 	return func(obj interface{}) {
-		glog.V(3).Infof("DeleteFunc: enqueuing service object")
+		if filterObject(obj) {
+			glog.V(5).Infof("DeleteFunc: filtering out service object")
+			return
+		}
+		glog.V(5).Infof("DeleteFunc: enqueuing service object")
 		lbex.servicesQueue.Enqueue(obj)
 	}
 }
 func serviceUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 	return func(obj, newObj interface{}) {
+		if filterObject(obj) {
+			glog.V(5).Infof("UpdateFunc: filtering out service object")
+			return
+		}
 		if !reflect.DeepEqual(obj, newObj) {
-			glog.V(3).Infof("UpdateFunc: enqueuing unequal service object")
+			glog.V(5).Infof("UpdateFunc: enqueuing unequal service object")
 			lbex.servicesQueue.Enqueue(newObj)
 		}
 	}
