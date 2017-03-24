@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const (
@@ -72,19 +73,49 @@ func (as serviceAnnotations) parseInt(name string) (int, error) {
 	return 0, ErrMissingAnnotations
 }
 
-func checkAnnotation(name string, service *api.Service) error {
+func checkAnnotationAPI(name string, service *api.Service) error {
 	if service == nil || len(service.GetAnnotations()) == 0 {
 		return ErrMissingAnnotations
 	}
 	if name == "" {
 		return ErrInvalidAnnotationName
 	}
-
 	return nil
 }
 
-// GetBoolAnnotation extracts a boolean from service annotation
-func GetBoolAnnotation(name string, service *api.Service) (bool, error) {
+func checkAnnotationV1(name string, service *v1.Service) error {
+	if service == nil || len(service.GetAnnotations()) == 0 {
+		return ErrMissingAnnotations
+	}
+	if name == "" {
+		return ErrInvalidAnnotationName
+	}
+	return nil
+}
+
+func checkAnnotation(name string, obj interface{}) error {
+	if name == "" {
+		return ErrInvalidAnnotationName
+	}
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("unexpected type assertion value: %T\n", t)
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		if len(service.GetAnnotations()) == 0 {
+			return ErrMissingAnnotations
+		}
+	case *api.Service:
+		service := obj.(*api.Service)
+		if len(service.GetAnnotations()) == 0 {
+			return ErrMissingAnnotations
+		}
+	}
+	return nil
+}
+
+// GetBoolAnnotationAPI extracts a boolean from an api.Service annotation
+func GetBoolAnnotationAPI(name string, service *api.Service) (bool, error) {
 	err := checkAnnotation(name, service)
 	if err != nil {
 		return false, err
@@ -92,31 +123,64 @@ func GetBoolAnnotation(name string, service *api.Service) (bool, error) {
 	return serviceAnnotations(service.GetAnnotations()).parseBool(name)
 }
 
+// GetBoolAnnotation extracts a boolean from service annotation
+func GetBoolAnnotation(name string, obj interface{}) (bool, error) {
+	err := checkAnnotation(name, obj)
+	if err != nil {
+		return false, err
+	}
+	switch obj.(type) {
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseBool(name)
+	case *api.Service:
+		service := obj.(*api.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseBool(name)
+	}
+	return false, ErrMissingAnnotations
+}
+
 // GetStringAnnotation extracts a string from service annotation
-func GetStringAnnotation(name string, service *api.Service) (string, error) {
-	err := checkAnnotation(name, service)
+func GetStringAnnotation(name string, obj interface{}) (string, error) {
+	err := checkAnnotation(name, obj)
 	if err != nil {
 		return "", err
 	}
-	return serviceAnnotations(service.GetAnnotations()).parseString(name)
+	switch obj.(type) {
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseString(name)
+	case *api.Service:
+		service := obj.(*api.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseString(name)
+	}
+	return "", ErrMissingAnnotations
 }
 
 // GetIntAnnotation extracts an int from an Ingress annotation
-func GetIntAnnotation(name string, service *api.Service) (int, error) {
-	err := checkAnnotation(name, service)
+func GetIntAnnotation(name string, obj interface{}) (int, error) {
+	err := checkAnnotation(name, obj)
 	if err != nil {
 		return 0, err
 	}
-	return serviceAnnotations(service.GetAnnotations()).parseInt(name)
+	switch obj.(type) {
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseInt(name)
+	case *api.Service:
+		service := obj.(*api.Service)
+		return serviceAnnotations(service.GetAnnotations()).parseInt(name)
+	}
+	return 0, ErrMissingAnnotations
 }
 
 // GetAlgorithm returns the string value of the annotations, or
 // the empty string if not present, and a bool to indicate wether
 // or not the value was present
-func GetAlgorithm(service *api.Service) (string, bool) {
-	value, err := GetStringAnnotation(LBEXAlgorithmKey, service)
-	if err != nil {
-		glog.Warningf("unexpected error reading annotation: %v", err)
+func GetAlgorithm(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXAlgorithmKey, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 		return "", false
 	}
 	return value, true
@@ -125,10 +189,10 @@ func GetAlgorithm(service *api.Service) (string, bool) {
 // GetHost returns the string value of the annotations, or the
 // empty string if not present, and a bool to indicate wether
 // or not the value was present
-func GetHost(service *api.Service) (string, bool) {
-	value, err := GetStringAnnotation(LBEXHostKey, service)
-	if err != nil {
-		glog.Warningf("unexpected error reading annotation: %v", err)
+func GetHost(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXHostKey, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 		return "", false
 	}
 	return value, true
@@ -136,10 +200,10 @@ func GetHost(service *api.Service) (string, bool) {
 
 // IsValid returns true if the given Service object specifies 'lbex' as the value
 // to the loadbalancer.class annotation.
-func IsValid(service *api.Service) bool {
-	value, err := GetStringAnnotation(LBAnnotationKey, service)
+func IsValid(obj interface{}) bool {
+	value, err := GetStringAnnotation(LBAnnotationKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
-		glog.Warningf("unexpected error reading annotation: %v", err)
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 	}
 	return value == LBEXValue
 }

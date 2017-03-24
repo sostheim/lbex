@@ -17,27 +17,18 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/golang/glog"
+
 	"k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 var (
 	lbAPIPort = 8081
 )
-
-// getTargetPort returns the numeric value of TargetPort
-func getTargetPort(servicePort *api.ServicePort) int {
-	return servicePort.TargetPort.IntValue()
-}
-
-// convenience type name modifications for lb rules.
-func getServiceNameForLBRule(s *api.Service, servicePort int) string {
-	if servicePort == 80 {
-		return s.Name
-	}
-	return fmt.Sprintf("%v:%v", s.Name, servicePort)
-}
 
 // Service models a backend service entry in the load balancer config.
 // The Ep field can contain the ips of the pods that make up a service, or the
@@ -72,4 +63,114 @@ func (s serviceByName) Swap(i, j int) {
 }
 func (s serviceByName) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
+}
+
+// ValidateServiceObjectType return wether or not the given object
+// is of type *api.Service or *v1.Service -> valid true, valid false otherwise
+func ValidateServiceObjectType(obj interface{}) error {
+	switch obj.(type) {
+	case *v1.Service:
+		return nil
+	case *api.Service:
+		return nil
+	}
+	return errors.New("unexpected type")
+}
+
+// GetServiceName return validated service type's name, error otherwise.
+func GetServiceName(obj interface{}) (string, error) {
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("GetServiceName: unexpected type assertion value: %T\n", t)
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return string(service.Name), nil
+	case *api.Service:
+		service := obj.(*api.Service)
+		return string(service.Name), nil
+	}
+	return "", errors.New("unexpected type")
+}
+
+// GetServiceNamespace return validated service type's namespace, error otherwise.
+func GetServiceNamespace(obj interface{}) (string, error) {
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("GetServiceNamespace: unexpected type assertion value: %T\n", t)
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return string(service.Namespace), nil
+	case *api.Service:
+		service := obj.(*api.Service)
+		return string(service.Namespace), nil
+	}
+	return "", errors.New("unexpected type")
+}
+
+// GetServiceType return validated service type's Tupe, error otherwise.
+func GetServiceType(obj interface{}) (string, error) {
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("GetServiceType: unexpected type assertion value: %T\n", t)
+	case *v1.Service:
+		service := obj.(*v1.Service)
+		return string(service.Spec.Type), nil
+	case *api.Service:
+		service := obj.(*api.Service)
+		return string(service.Spec.Type), nil
+	}
+	return "", errors.New("unexpected type")
+}
+
+// ServiceTypeLoadBalancer returns true iff "Type: LoadBalancer"
+func ServiceTypeLoadBalancer(obj interface{}) bool {
+	serviceType, err := GetServiceType(obj)
+	if err != nil {
+		return false
+	}
+	switch obj.(type) {
+	case *v1.Service:
+		return serviceType == string(v1.ServiceTypeLoadBalancer)
+	case *api.Service:
+		return serviceType == string(api.ServiceTypeLoadBalancer)
+	}
+	return false
+}
+
+// GetServicePortTargetPortInt returns the numeric value of TargetPort
+func GetServicePortTargetPortInt(obj interface{}) (int, error) {
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("GetServicePortTargetPortInt: unexpected type assertion value: %T\n", t)
+	case *v1.ServicePort:
+		servicePort := obj.(*v1.ServicePort)
+		return servicePort.TargetPort.IntValue(), nil
+	case *api.Service:
+		servicePort := obj.(*api.ServicePort)
+		return servicePort.TargetPort.IntValue(), nil
+	}
+	return 0, errors.New("unexpected type")
+}
+
+// GetServicePortTargetPortString returns the numeric value of TargetPort
+func GetServicePortTargetPortString(obj interface{}) (string, error) {
+	switch t := obj.(type) {
+	default:
+		glog.V(3).Infof("GetServicePortTargetPortString: unexpected type assertion value: %T\n", t)
+	case *v1.ServicePort:
+		servicePort := obj.(*v1.ServicePort)
+		return servicePort.TargetPort.StrVal, nil
+	case *api.Service:
+		servicePort := obj.(*api.ServicePort)
+		return servicePort.TargetPort.StrVal, nil
+	}
+	return "", errors.New("unexpected type")
+}
+
+// GetServiceNameForLBRule - convenience type name modifications for lb rules.
+func GetServiceNameForLBRule(serviceName string, servicePort int) string {
+	if servicePort == 80 {
+		return serviceName
+	}
+	return fmt.Sprintf("%v:%v", serviceName, servicePort)
 }
