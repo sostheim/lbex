@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/glog"
-
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 )
@@ -72,54 +70,37 @@ func ValidateServiceObjectType(obj interface{}) error {
 	case *v1.Service:
 		return nil
 	case *api.Service:
-		return nil
+		return errors.New("ValidateServiceObjectType: unsupported type api.* (must be v1.*)")
 	}
-	return errors.New("unexpected type")
+	return errors.New("ValidateServiceObjectType: unexpected type")
 }
 
 // GetServiceName return validated service type's name, error otherwise.
 func GetServiceName(obj interface{}) (string, error) {
-	switch t := obj.(type) {
-	default:
-		glog.V(3).Infof("GetServiceName: unexpected type assertion value: %T\n", t)
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return string(service.Name), nil
-	case *api.Service:
-		service := obj.(*api.Service)
-		return string(service.Name), nil
+	service, ok := obj.(*v1.Service)
+	if !ok {
+		return "", errors.New("type assertion failure")
 	}
-	return "", errors.New("unexpected type")
+	return string(service.Name), nil
+
 }
 
 // GetServiceNamespace return validated service type's namespace, error otherwise.
 func GetServiceNamespace(obj interface{}) (string, error) {
-	switch t := obj.(type) {
-	default:
-		glog.V(3).Infof("GetServiceNamespace: unexpected type assertion value: %T\n", t)
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return string(service.Namespace), nil
-	case *api.Service:
-		service := obj.(*api.Service)
-		return string(service.Namespace), nil
+	service, ok := obj.(*v1.Service)
+	if !ok {
+		return "", errors.New("type assertion failure")
 	}
-	return "", errors.New("unexpected type")
+	return string(service.Namespace), nil
 }
 
 // GetServiceType return validated service type's Tupe, error otherwise.
 func GetServiceType(obj interface{}) (string, error) {
-	switch t := obj.(type) {
-	default:
-		glog.V(3).Infof("GetServiceType: unexpected type assertion value: %T\n", t)
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return string(service.Spec.Type), nil
-	case *api.Service:
-		service := obj.(*api.Service)
-		return string(service.Spec.Type), nil
+	service, ok := obj.(*v1.Service)
+	if !ok {
+		return "", errors.New("type assertion failure")
 	}
-	return "", errors.New("unexpected type")
+	return string(service.Spec.Type), nil
 }
 
 // ServiceTypeLoadBalancer returns true iff "Type: LoadBalancer"
@@ -128,43 +109,25 @@ func ServiceTypeLoadBalancer(obj interface{}) bool {
 	if err != nil {
 		return false
 	}
-	switch obj.(type) {
-	case *v1.Service:
-		return serviceType == string(v1.ServiceTypeLoadBalancer)
-	case *api.Service:
-		return serviceType == string(api.ServiceTypeLoadBalancer)
-	}
-	return false
+	return serviceType == string(api.ServiceTypeLoadBalancer)
 }
 
 // GetServicePortTargetPortInt returns the numeric value of TargetPort
 func GetServicePortTargetPortInt(obj interface{}) (int, error) {
-	switch t := obj.(type) {
-	default:
-		glog.V(3).Infof("GetServicePortTargetPortInt: unexpected type assertion value: %T\n", t)
-	case *v1.ServicePort:
-		servicePort := obj.(*v1.ServicePort)
-		return servicePort.TargetPort.IntValue(), nil
-	case *api.Service:
-		servicePort := obj.(*api.ServicePort)
-		return servicePort.TargetPort.IntValue(), nil
+	servicePort, ok := obj.(*v1.ServicePort)
+	if !ok {
+		return 0, errors.New("type assertion failure")
 	}
-	return 0, errors.New("unexpected type")
+	return servicePort.TargetPort.IntValue(), nil
 }
 
 // GetServicePortTargetPortString returns the numeric value of TargetPort
 func GetServicePortTargetPortString(obj interface{}) (string, error) {
-	switch t := obj.(type) {
-	default:
-		glog.V(3).Infof("GetServicePortTargetPortString: unexpected type assertion value: %T\n", t)
-	case *v1.ServicePort:
-		servicePort := obj.(*v1.ServicePort)
-		return servicePort.TargetPort.StrVal, nil
-	case *api.Service:
-		servicePort := obj.(*api.ServicePort)
-		return servicePort.TargetPort.StrVal, nil
+	servicePort, ok := obj.(*v1.ServicePort)
+	if !ok {
+		return "", errors.New("type assertion failure")
 	}
-	return "", errors.New("unexpected type")
+	return servicePort.TargetPort.StrVal, nil
 }
 
 // GetServiceNameForLBRule - convenience type name modifications for lb rules.
