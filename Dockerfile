@@ -13,15 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License. 
 #
-# Dockerfile - Netcat (nc) runner.
+# Dockerfile - External LoadBalacner (lbex).
 #
 # - Example Commands:
-# docker build --rm -t sostheim/lbex .
+# docker build --rm --pull --tag sostheim/lbex .
 #
-FROM ubuntu:latest
+FROM nginx:1.11.10
 MAINTAINER Rick Sostheim
 LABEL vendor="Samsung CNCT"
 
-ADD lbex lbex
+# forward nginx access and error logs to stdout and stderr of the ingress
+# controller process
+RUN ln -sf /proc/1/fd/1 /var/log/nginx/access.log \
+	&& ln -sf /proc/1/fd/2 /var/log/nginx/error.log
+
+COPY lbex nginx/ingress.tmpl nginx/nginx.conf.tmpl /
 
 ENTRYPOINT ["/lbex"]

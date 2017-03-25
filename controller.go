@@ -19,11 +19,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/sostheim/lbex/annotations"
+	"github.com/sostheim/lbex/nginx"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -57,19 +59,36 @@ type lbExController struct {
 	servicesStore cache.Store
 	servicesQueue *TaskQueue
 
-	stopCh chan struct{}
-
 	// The service to provide load balancing for, or "all" if empty
 	service string
+
+	stopCh chan struct{}
+
+	cnf *nginx.Configurator
 }
 
 func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, service *string) *lbExController {
+	// local testing -> no actual NGINX instance
+	local := ("darwin" == runtime.GOOS)
+
+	glog.V(3).Infof("newLbExController: is local: %t", local)
+
+	// Create and start the NGINX LoadBalancer
+	ngxc, _ := nginx.NewNginxController("/etc/nginx/", local, false)
+	ngxc.Start()
+
+	config := nginx.NewDefaultConfig()
+	cnftor := nginx.NewConfigurator(ngxc, config)
+
+	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")
+
 	// create external loadbalancer controller struct
 	lbexc := lbExController{
 		client:    client,
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
 		service:   *service,
+		cnf:       cnftor,
 	}
 	lbexc.servicesQueue = NewTaskQueue(lbexc.syncServices)
 	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
@@ -77,6 +96,14 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 	lbexc.endpointsLWC = newEndpointsListWatchControllerForClientset(&lbexc)
 
 	return &lbexc
+}
+
+func (lbex *lbExController) run() {
+	// run the controller and queue goroutines
+	go lbex.servciesLWC.controller.Run(lbex.stopCh)
+	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
+	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
+	go lbex.endpointsQueue.Run(time.Second, lbex.stopCh)
 }
 
 func (lbex *lbExController) syncServices(obj interface{}) error {
@@ -87,7 +114,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 
 	key, ok := obj.(string)
 	if !ok {
-		return errors.New("syncServices: invalid conversion from object any to string for key")
+		return errors.New("syncServices: type assertion faild for key string")
 	}
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)

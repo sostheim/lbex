@@ -41,14 +41,6 @@ func init() {
 	go wait.Until(glog.Flush, 10*time.Second, wait.NeverStop)
 }
 
-func startListWatches(lbex *lbExController) {
-	// run the controller and queue goroutines
-	go lbex.servciesLWC.controller.Run(lbex.stopCh)
-	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
-	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
-	go lbex.endpointsQueue.Run(time.Second, lbex.stopCh)
-}
-
 func addGV(config *rest.Config) {
 	config.ContentConfig.GroupVersion = &unversioned.GroupVersion{
 		Group:   "",
@@ -84,12 +76,8 @@ func byProxy() *rest.Config {
 }
 
 func main() {
-	glog.V(3).Infof("main(): starting")
-
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
-
-	glog.V(3).Infof("main(): creating new config")
 
 	// creates the config, in preference order, for:
 	// 1 - the proxy URL, if present as an argument
@@ -126,9 +114,9 @@ func main() {
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	startListWatches(lbex)
+	lbex.run()
 
 	for {
-		time.Sleep(20 * time.Second)
+		time.Sleep(15 * time.Second)
 	}
 }
