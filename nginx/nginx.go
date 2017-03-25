@@ -113,11 +113,9 @@ func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*N
 
 	if !local {
 		createDir(ngxc.nginxCertsPath)
+		cfg := &NginxMainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize, HealthStatus: healthStatus}
+		ngxc.UpdateMainConfigFile(cfg)
 	}
-
-	cfg := &NginxMainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize, HealthStatus: healthStatus}
-	ngxc.UpdateMainConfigFile(cfg)
-
 	return &ngxc, nil
 }
 
