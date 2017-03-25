@@ -50,7 +50,6 @@ func addGV(config *rest.Config) {
 
 func inCluster() *rest.Config {
 	glog.V(3).Infof("inCluster(): creating config")
-	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
@@ -60,7 +59,6 @@ func inCluster() *rest.Config {
 
 func external() *rest.Config {
 	glog.V(3).Infof("external(): creating config")
-	// uses the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
 		panic(err.Error())
@@ -109,11 +107,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	// create external loadbalancer controller struct
-	lbex := newLbExController(client, clientset, serviceName)
-
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
+	lbex := newLbExController(client, clientset, serviceName)
 	lbex.run()
 
 	for {
