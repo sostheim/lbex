@@ -39,8 +39,26 @@ type Config struct {
 
 // NewDefaultConfig creates a Config with default values
 func NewDefaultConfig() *Config {
+	return NewDefaultIngressConfig()
+}
+
+// NewDefaultIngressConfig creates a Config with default values appropriate for Ingress
+func NewDefaultIngressConfig() *Config {
 	return &Config{
 		ServerTokens:               true,
+		ProxyConnectTimeout:        "60s",
+		ProxyReadTimeout:           "60s",
+		ClientMaxBodySize:          "1m",
+		MainServerNamesHashMaxSize: "512",
+		ProxyBuffering:             true,
+		HSTSMaxAge:                 2592000,
+	}
+}
+
+// NewDefaultServiceConfig creates a Config with default values appropriate for Service LoadBalancing
+func NewDefaultServiceConfig() *Config {
+	return &Config{
+		ServerTokens:               false,
 		ProxyConnectTimeout:        "60s",
 		ProxyReadTimeout:           "60s",
 		ClientMaxBodySize:          "1m",

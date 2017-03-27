@@ -6,13 +6,14 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 )
 
 const emptyHost = ""
 
-// Configurator transforms an Ingress resource into NGINX Configuration
+// Configurator transforms an Ingress or Service resource into NGINX Configuration
 type Configurator struct {
 	nginx  *NginxController
 	config *Config
@@ -39,10 +40,22 @@ func (cnf *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) {
 	defer cnf.lock.Unlock()
 
 	pems := cnf.updateCertificates(ingEx)
-	nginxCfg := cnf.generateNginxCfg(ingEx, pems)
+	nginxCfg := cnf.generateNginxIngressCfg(ingEx, pems)
 	cnf.nginx.AddOrUpdateIngress(name, nginxCfg)
 	if err := cnf.nginx.Reload(); err != nil {
-		glog.Errorf("Error when adding or updating ingress %q: %q", name, err)
+		glog.Errorf("error on reload adding or updating ingress %q: %q", name, err)
+	}
+}
+
+// AddOrUpdateService adds or updates NGINX configuration for an Service object
+func (cnf *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) {
+	cnf.lock.Lock()
+	defer cnf.lock.Unlock()
+
+	nginxCfg := cnf.generateNginxServiceCfg(svc)
+	cnf.nginx.AddOrUpdateService(name, nginxCfg)
+	if err := cnf.nginx.Reload(); err != nil {
+		glog.Errorf("error on reload adding or updating service %q: %q", name, err)
 	}
 }
 
@@ -79,8 +92,9 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 
 	return pems
 }
-func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]string) IngressNginxConfig {
-	ingCfg := cnf.createConfig(ingEx)
+
+func (cnf *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[string]string) IngressNginxConfig {
+	ingCfg := cnf.createIngressConfig(ingEx)
 
 	upstreams := make(map[string]Upstream)
 
@@ -197,7 +211,32 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 	return IngressNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cnf *Configurator) createConfig(ingEx *IngressEx) Config {
+func (cnf *Configurator) generateNginxServiceCfg(svc *ServiceSpec) ServiceNginxConfig {
+	svcCfg := cnf.createServiceConfig(svc)
+	svcCfg.MainLogFormat = ""
+
+	upstreams := make(map[string]StreamUpstream)
+
+	name := getNameForStreamUpstream(svc.Service, emptyHost)
+	upstream := cnf.createStreamUpstream(svc, name)
+	upstreams[name] = upstream
+
+	var servers []StreamServer
+
+	for _, servicePort := range svc.Service.Spec.Ports {
+
+		portName := servicePort.Name
+
+		server := StreamServer{
+			Listen: StreamListen{Address: portName},
+		}
+		servers = append(servers, server)
+	}
+
+	return ServiceNginxConfig{Upstreams: streamUpstreamMapToSlice(upstreams), Servers: servers}
+}
+
+func (cnf *Configurator) createIngressConfig(ingEx *IngressEx) Config {
 	ingCfg := *cnf.config
 	if serverTokens, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/server-tokens", ingEx.Ingress); exists {
 		if err != nil {
@@ -310,6 +349,11 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) Config {
 	return ingCfg
 }
 
+func (cnf *Configurator) createServiceConfig(svc *ServiceSpec) Config {
+	svcCfg := *cnf.config
+	return svcCfg
+}
+
 func getWebsocketServices(ingEx *IngressEx) map[string]bool {
 	wsServices := make(map[string]bool)
 
@@ -408,6 +452,23 @@ func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *
 	return ups
 }
 
+func (cnf *Configurator) createStreamUpstream(svc *ServiceSpec, name string) StreamUpstream {
+	su := NewStreamUpstreamWithDefaultServer(name)
+
+	endps, exists := svc.Endpoints[svc.Service.Namespace+"/"+svc.Service.Name]
+	if exists {
+		var suServers []StreamUpstreamServer
+		for _, endp := range endps {
+			suServers = append(suServers, StreamUpstreamServer{Address: endp})
+		}
+		if len(suServers) > 0 {
+			su.UpstreamServers = suServers
+		}
+	}
+
+	return su
+}
+
 func pathOrDefault(path string) string {
 	if path == "" {
 		return "/"
@@ -419,24 +480,34 @@ func getNameForUpstream(ing *extensions.Ingress, host string, service string) st
 	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
 }
 
+func getNameForStreamUpstream(svc *v1.Service, host string) string {
+	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, host)
+}
+
 func upstreamMapToSlice(upstreams map[string]Upstream) []Upstream {
 	result := make([]Upstream, 0, len(upstreams))
-
 	for _, ups := range upstreams {
 		result = append(result, ups)
 	}
-
 	return result
 }
 
-// DeleteIngress deletes NGINX configuration for an Ingress resource
-func (cnf *Configurator) DeleteIngress(name string) {
+func streamUpstreamMapToSlice(upstreams map[string]StreamUpstream) []StreamUpstream {
+	result := make([]StreamUpstream, 0, len(upstreams))
+	for _, ups := range upstreams {
+		result = append(result, ups)
+	}
+	return result
+}
+
+// DeleteConfiguration deletes NGINX configuration for an Ingress Resource or Service LoadBalancer
+func (cnf *Configurator) DeleteConfiguration(name string) {
 	cnf.lock.Lock()
 	defer cnf.lock.Unlock()
 
-	cnf.nginx.DeleteIngress(name)
+	cnf.nginx.DeleteConfiguration(name)
 	if err := cnf.nginx.Reload(); err != nil {
-		glog.Errorf("Error when removing ingress %q: %q", name, err)
+		glog.Errorf("error on reload, removing configuration: %q: %q", name, err)
 	}
 }
 

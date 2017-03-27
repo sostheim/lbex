@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"text/template"
 
 	"github.com/golang/glog"
@@ -20,25 +21,28 @@ type NginxController struct {
 	local          bool
 }
 
-// IngressNginxConfig describes an NGINX configuration
+// IngressNginxConfig describes an NGINX configuration Ingress Resource handling
 type IngressNginxConfig struct {
 	Upstreams []Upstream
 	Servers   []Server
 }
 
-// Upstream describes an NGINX upstream
+// Upstream describes an NGINX upstream (context http)
+// http://nginx.org/en/docs/http/ngx_http_upstream_module.html#upstream
 type Upstream struct {
 	Name            string
 	UpstreamServers []UpstreamServer
 }
 
-// UpstreamServer describes a server in an NGINX upstream
+// UpstreamServer describes a server in an NGINX upstream (context http::upstream)
+// http://nginx.org/en/docs/http/ngx_http_upstream_module.html#server
 type UpstreamServer struct {
 	Address string
 	Port    string
 }
 
 // Server describes an NGINX server
+// http://nginx.org/en/docs/http/ngx_http_core_module.html
 type Server struct {
 	ServerSnippets        []string
 	Name                  string
@@ -93,6 +97,54 @@ type NginxMainConfig struct {
 	SSLDHParam             string
 }
 
+// ServiceNginxConfig describes an NGINX configuration for Service LoadBalancing
+type ServiceNginxConfig struct {
+	Upstreams []StreamUpstream
+	Servers   []StreamServer
+}
+
+// StreamUpstream describes an NGINX upstream (context stream)
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#upstream
+type StreamUpstream struct {
+	Name            string
+	UpstreamServers []StreamUpstreamServer
+}
+
+// StreamUpstreamServer describes a server in an NGINX upstream (context stream::upstream)
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#server
+type StreamUpstreamServer struct {
+	Address     string // "The address can be specified as a domain name or IP address with an obligatory port"
+	Weight      int
+	MaxConns    int
+	MaxFails    int
+	FailTimeout int
+	Backup      bool
+	Down        bool
+	Resolve     bool
+	Service     string
+	SlowStart   int
+}
+
+// StreamServer describes an NGINX Server (context stream)
+// http://nginx.org/en/docs/stream/ngx_stream_core_module.html#server
+type StreamServer struct {
+	Listen               StreamListen
+	ProxyProtocolTimeout int
+	Resolver             string
+	ResolverTimeout      int
+}
+
+// StreamListen describes an NGINX server listener (context stream::server)
+// http://nginx.org/en/docs/stream/ngx_stream_core_module.html#listen
+type StreamListen struct {
+	Address       string
+	Port          int
+	SSL           bool
+	UDP           bool
+	ProxyProtocol bool
+	// other fields ommitted, e.g backlog ... so_keepalive
+}
+
 // NewUpstreamWithDefaultServer creates an upstream with the default server.
 // proxy_pass to an upstream with the default server returns 502.
 // We use it for services that have no endpoints
@@ -101,6 +153,19 @@ func NewUpstreamWithDefaultServer(name string) Upstream {
 		Name:            name,
 		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
 	}
+}
+
+// NewStreamUpstreamWithDefaultServer creates an upstream with the default server.
+func NewStreamUpstreamWithDefaultServer(name string) StreamUpstream {
+	return StreamUpstream{
+		Name:            name,
+		UpstreamServers: []StreamUpstreamServer{StreamUpstreamServer{Address: "127.0.0.1:1234"}},
+	}
+}
+
+// IsStreamUpstreamDefault - true if still default value, false otherwise.
+func IsStreamUpstreamDefault(su StreamUpstream) bool {
+	return reflect.DeepEqual(su, NewStreamUpstreamWithDefaultServer(su.Name))
 }
 
 // NewNginxController creates a NGINX controller
@@ -119,10 +184,10 @@ func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*N
 	return &ngxc, nil
 }
 
-// DeleteIngress deletes the configuration file, which corresponds for the
-// specified ingress from NGINX conf directory
-func (nginx *NginxController) DeleteIngress(name string) {
-	filename := nginx.getIngressNginxConfigFileName(name)
+// DeleteConfiguration deletes the configuration file, which corresponds for the
+// specified ingress resource / service load balancer from NGINX conf directory
+func (nginx *NginxController) DeleteConfiguration(name string) {
+	filename := nginx.getNginxConfigFileName(name)
 	glog.V(3).Infof("deleting %v", filename)
 
 	if !nginx.local {
@@ -135,9 +200,16 @@ func (nginx *NginxController) DeleteIngress(name string) {
 // AddOrUpdateIngress creates or updates a file with
 // the specified configuration for the specified ingress
 func (nginx *NginxController) AddOrUpdateIngress(name string, config IngressNginxConfig) {
-	glog.V(3).Infof("Updating NGINX configuration")
-	filename := nginx.getIngressNginxConfigFileName(name)
-	nginx.templateIt(config, filename)
+	glog.V(3).Infof("Updating NGINX configuration for Ingress Resource")
+	filename := nginx.getNginxConfigFileName(name)
+	nginx.templateIngress(config, filename)
+}
+
+// AddOrUpdateService creates or updates a file with the specified service config
+func (nginx *NginxController) AddOrUpdateService(name string, config ServiceNginxConfig) {
+	glog.V(3).Infof("Updating NGINX configuration for Service LoadBalancer")
+	filename := nginx.getNginxConfigFileName(name)
+	nginx.templateService(config, filename)
 }
 
 // AddOrUpdateDHParam creates the servers dhparam.pem file
@@ -189,37 +261,59 @@ func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, ke
 	return pemFileName
 }
 
-func (nginx *NginxController) getIngressNginxConfigFileName(name string) string {
+func (nginx *NginxController) getNginxConfigFileName(name string) string {
 	return path.Join(nginx.nginxConfdPath, name+".conf")
 }
 
-func (nginx *NginxController) templateIt(config IngressNginxConfig, filename string) {
+func (nginx *NginxController) templateIngress(config IngressNginxConfig, filename string) {
 	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
 	if err != nil {
-		glog.Fatal("Failed to parse template file")
+		glog.Fatal("failed to parse ingress template file")
 	}
 
-	glog.V(3).Infof("Writing NGINX conf to %v", filename)
-
 	if glog.V(3) {
+		glog.Infof("writing NGINX Ingress Resource configuration to %v", filename)
 		tmpl.Execute(os.Stdout, config)
 	}
 
 	if !nginx.local {
 		w, err := os.Create(filename)
 		if err != nil {
-			glog.Fatalf("Failed to open %v: %v", filename, err)
+			glog.Fatalf("failed to open %v: %v", filename, err)
 		}
 		defer w.Close()
 
 		if err := tmpl.Execute(w, config); err != nil {
-			glog.Fatalf("Failed to write template %v", err)
+			glog.Fatalf("failed to write template %v", err)
 		}
-	} else {
-		// print conf to stdout here
 	}
 
-	glog.V(3).Infof("NGINX configuration file had been updated")
+	glog.V(3).Infof("NGINX Ingress Resource configuration file had been updated")
+}
+
+func (nginx *NginxController) templateService(config ServiceNginxConfig, filename string) {
+	tmpl, err := template.New("service.tmpl").ParseFiles("service.tmpl")
+	if err != nil {
+		glog.Fatal("Failed to parse service template file")
+	}
+
+	if glog.V(3) {
+		glog.Infof("writing NGINX Service LoadBalancer configuration to %v", filename)
+		tmpl.Execute(os.Stdout, config)
+	}
+
+	if !nginx.local {
+		w, err := os.Create(filename)
+		if err != nil {
+			glog.Fatalf("failed to open %v: %v", filename, err)
+		}
+		defer w.Close()
+
+		if err := tmpl.Execute(w, config); err != nil {
+			glog.Fatalf("failed to write template %v", err)
+		}
+	}
+	glog.V(3).Infof("NGINX Service LoadBalancer configuration file had been updated")
 }
 
 // Reload reloads NGINX
