@@ -36,8 +36,12 @@ import (
 
 var (
 	resyncPeriod        = 30 * time.Second
-	supportedAlgorithms = []string{"roundrobin", "leastconn"}
-	defaultAlgorithm    = string("roundrobin")
+	supportedAlgorithms = []string{
+		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
+		"leastconn",  // selects the server with the smaller number of current active connections.
+		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
+	}
+	defaultAlgorithm = string("roundrobin")
 )
 
 // List Watch (lw) Controller (lwc)
@@ -77,7 +81,7 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 	ngxc, _ := nginx.NewNginxController("/etc/nginx/", local, false)
 	ngxc.Start()
 
-	config := nginx.NewDefaultConfig()
+	config := nginx.NewDefaultServiceConfig()
 	cnftor := nginx.NewConfigurator(ngxc, config)
 
 	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")
@@ -119,7 +123,8 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
-		return err
+		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
+		lbex.cnf.DeleteConfiguration(key)
 	} else if exists {
 		glog.V(3).Infof("syncServices: updating services for key: %s", key)
 		glog.V(4).Infof("syncServices: updating services object %v", storeObj)
