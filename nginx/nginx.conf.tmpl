@@ -1,16 +1,40 @@
 
-user  nginx;
-worker_processes  1;
+{{/* Boilerplate configuration included for all configurations. */}}
 
-error_log  /var/log/nginx/error.log warn;
-pid        /var/run/nginx.pid;
+{{if not .Daemon}}daemon off;{{end}}
 
+{{if .ErrorLogFile}}error_log {{.ErrorLogFile}}{{if .ErrorLogLevel}} {{ErrorLogLevel}}{{end}};{{end}}
+
+{{range $envVar, $envVal := .Environment}}
+env {{$envVar -}}{{if $envVal}}={{- $envVal}}{{end}};
+{{end}}
+
+{{if .LockFile}}lock_file {{.LockFile}};{{end}}
+{{if .PidFile}}pid {{.PidFile}};{{end}}
+
+{{if .User}}user {{.User}}{{if .Group}} {{.Group}}{{end}};{{end}}
+
+{{if .WorkerPriority}}worker_priority  {{.WorkerPriority}};{{end}}
+{{if .WorkerProccesses}}worker_processes  {{.WorkerProccesses}};{{end}}
+
+{{if .WorkingDirectory}}working_directory  {{.WorkingDirectory}};{{end}}
 
 events {
-    worker_connections  1024;
+    {{if .AcceptMutex}}accept_mutex on{{end}}
+    {{if .AcceptMutexDelay}}accept_mutex_delay {{.AcceptMutexDelay}}{{end}}
+
+    {{if .MultiAccept}}	multi_accept on{{end}}
+
+    {{/* This stanza's defalut 'else' value ensures that there is always at 
+         least one configuration value present in the event's context. */}}
+    {{if .WorkerConnections}}
+    worker_connections  {{.WorkerConnections}};
+    {{else}}
+    worker_connections  512;
+    {{end}}
 }
 
-
+{{if .DefaultHTTPServer}}
 http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
@@ -63,3 +87,4 @@ http {
 
     include /etc/nginx/conf.d/*.conf;
 }
+{{end}}

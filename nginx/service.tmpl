@@ -1,87 +1,12 @@
-{{range $upstream := .Upstreams}}
+{{range $upstream := .StreamUpstreams}}
 upstream {{$upstream.Name}} {
-	{{range $server := $upstream.UpstreamServers}}
+	{{range $server := $upstream.StreamUpstreamServers}}
 	server {{$server.Address}}:{{$server.Port}};{{end}}
 }{{end}}
 
-{{range $server := .Servers}}
-server {
-	listen 80{{if $server.ProxyProtocol}} proxy_protocol{{end}};
-	{{if $server.SSL}}
-	listen 443 ssl{{if $server.HTTP2}} http2{{end}}{{if $server.ProxyProtocol}} proxy_protocol{{end}};
-	ssl_certificate {{$server.SSLCertificate}};
-	ssl_certificate_key {{$server.SSLCertificateKey}};
-	{{end}}
-	{{range $setRealIPFrom := $server.SetRealIPFrom}}
-	set_real_ip_from {{$setRealIPFrom}};{{end}}
-	{{if $server.RealIPHeader}}real_ip_header {{$server.RealIPHeader}};{{end}}
-	{{if $server.RealIPRecursive}}real_ip_recursive on;{{end}}
+stream {
+	{{range $server := .StreamServers}}
+	server {
 
-	{{if not $server.ServerTokens}}server_tokens off;{{end}}
-
-	{{if $server.Name}}
-	server_name {{$server.Name}};
-	{{end}}
-	{{range $proxyHideHeader := $server.ProxyHideHeaders}}
-	proxy_hide_header {{$proxyHideHeader}};{{end}}
-	{{range $proxyPassHeader := $server.ProxyPassHeaders}}
-	proxy_pass_header {{$proxyPassHeader}};{{end}}
-	{{if $server.SSL}}
-	if ($scheme = http) {
-		return 301 https://$host$request_uri;
-	}
-	{{- if $server.HSTS}}
-	proxy_hide_header Strict-Transport-Security;
-	add_header Strict-Transport-Security "max-age={{$server.HSTSMaxAge}}; {{if $server.HSTSIncludeSubdomains}}includeSubDomains; {{end}}preload" always;{{end}}
-	{{- end}}
-	{{- if $server.RedirectToHTTPS}}
-	if ($http_x_forwarded_proto = 'http') {
-		return 301 https://$host$request_uri;
-	}
-	{{- end}}
-
-	{{- if $server.ServerSnippets}}
-	{{range $value := $server.ServerSnippets}}
-	{{$value}}{{end}}
-	{{- end}}
-
-	{{range $location := $server.Locations}}
-	location {{$location.Path}} {
-		proxy_http_version 1.1;
-		{{if $location.Websocket}}
-		proxy_set_header Upgrade $http_upgrade;
-		proxy_set_header Connection $connection_upgrade;
-		{{end}}
-
-		{{- if $location.LocationSnippets}}
-		{{range $value := $location.LocationSnippets}}
-		{{$value}}{{end}}
-		{{- end}}
-
-		proxy_connect_timeout {{$location.ProxyConnectTimeout}};
-		proxy_read_timeout {{$location.ProxyReadTimeout}};
-		client_max_body_size {{$location.ClientMaxBodySize}};
-		proxy_set_header Host $host;
-		proxy_set_header X-Real-IP $remote_addr;
-		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-		proxy_set_header X-Forwarded-Host $host;
-		proxy_set_header X-Forwarded-Port $server_port;
-		proxy_set_header X-Forwarded-Proto {{if $server.RedirectToHTTPS}}https{{else}}$scheme{{end}};
-
-		proxy_buffering {{if $location.ProxyBuffering}}on{{else}}off{{end}};
-		{{- if $location.ProxyBuffers}}
-		proxy_buffers {{$location.ProxyBuffers}};
-		{{- end}}
-		{{- if $location.ProxyBufferSize}}
-		proxy_buffer_size {{$location.ProxyBufferSize}};
-		{{- end}}
-		{{- if $location.ProxyMaxTempFileSize}}
-		proxy_max_temp_file_size {{$location.ProxyMaxTempFileSize}};
-		{{- end}}
-		{{if $location.SSL}}
-		proxy_pass https://{{$location.Upstream.Name}}{{$location.Rewrite}};
-		{{else}}
-		proxy_pass http://{{$location.Upstream.Name}}{{$location.Rewrite}};
-		{{end}}
 	}{{end}}
-}{{end}}
+}
