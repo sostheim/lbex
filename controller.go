@@ -78,10 +78,10 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 	glog.V(3).Infof("newLbExController: is local: %t", local)
 
 	// Create and start the NGINX LoadBalancer
-	ngxc, _ := nginx.NewNginxController("/etc/nginx/", local, false)
+	ngxc, _ := nginx.NewNginxController(nginx.ServiceCfg, "/etc/nginx/", local, false)
 	ngxc.Start()
 
-	config := nginx.NewDefaultConfig(nginx.ServiceCfg)
+	config := nginx.NewDefaultConfig()
 	cnftor := nginx.NewConfigurator(ngxc, config)
 
 	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")

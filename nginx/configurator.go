@@ -523,14 +523,16 @@ func (cnf *Configurator) UpdateConfig(config *Config) {
 
 	cnf.config = config
 	mainCfg := &NginxMainConfig{
-		HTTPSnippets:              config.MainHTTPSnippets,
-		ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
-		ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,
-		LogFormat:                 config.MainLogFormat,
-		SSLProtocols:              config.MainServerSSLProtocols,
-		SSLCiphers:                config.MainServerSSLCiphers,
-		SSLDHParam:                config.MainServerSSLDHParam,
-		SSLPreferServerCiphers:    config.MainServerSSLPreferServerCiphers,
+		HTTPContext: NginxMainHTTPConfig{
+			HTTPSnippets:              config.MainHTTPSnippets,
+			ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
+			ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,
+			LogFormat:                 config.MainLogFormat,
+			SSLProtocols:              config.MainServerSSLProtocols,
+			SSLCiphers:                config.MainServerSSLCiphers,
+			SSLDHParam:                config.MainServerSSLDHParam,
+			SSLPreferServerCiphers:    config.MainServerSSLPreferServerCiphers,
+		},
 	}
 
 	cnf.nginx.UpdateMainConfigFile(mainCfg)

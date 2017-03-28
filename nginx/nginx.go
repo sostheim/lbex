@@ -14,6 +14,13 @@ import (
 
 const dhparamFilename = "dhparam.pem"
 
+type Configuration uint8
+
+const (
+	IngressCfg = Configuration(iota)
+	ServiceCfg
+)
+
 // NginxController Updates NGINX configuration, starts and reloads NGINX
 type NginxController struct {
 	nginxConfdPath string
@@ -85,6 +92,40 @@ type Location struct {
 
 // NginxMainConfig describe the main NGINX configuration file
 type NginxMainConfig struct {
+	// Context: main directives
+	Daemon         bool
+	ErrorLogFile   string
+	ErrorLogLevel  string
+	Environment    map[string]string
+	LockFile       string
+	PidFile        string
+	User           string
+	Group          string
+	WorkerPriority string
+	// TODO: This needs to be a ConfigMap entry or CLI flag so that we can make
+	//       it a function of the number of CPUs/vCPUs, and configure the POD
+	//       resource limits propotionally for the scheduler.  For now this
+	//       *should probably not* be set to 'auto'
+	WorkerProcesses  string
+	WorkingDirectory string
+
+	EventContext NginxMainEventConfig
+
+	DefaultHTTPServer bool
+	HTTPContext       NginxMainHTTPConfig
+}
+
+// NginxMainEventConfig describe the main NGINX configuration file's 'events' context
+type NginxMainEventConfig struct {
+	// Context: events directives
+	AcceptMutex       bool
+	AcceptMutexDelay  string
+	MultiAccept       bool
+	WorkerConnections string
+}
+
+// NginxMainHTTPConfig describe the main NGINX configuration file's 'http' context
+type NginxMainHTTPConfig struct {
 	ServerNamesHashBucketSize string
 	ServerNamesHashMaxSize    string
 	LogFormat                 string
@@ -169,7 +210,7 @@ func IsStreamUpstreamDefault(su StreamUpstream) bool {
 }
 
 // NewNginxController creates a NGINX controller
-func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*NginxController, error) {
+func NewNginxController(cfgType Configuration, nginxConfPath string, local bool, healthStatus bool) (*NginxController, error) {
 	ngxc := NginxController{
 		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
 		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
@@ -177,8 +218,16 @@ func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*N
 	}
 
 	if !local {
-		createDir(ngxc.nginxCertsPath)
-		cfg := &NginxMainConfig{ServerNamesHashMaxSize: NewDefaultConfig(IngressCfg).MainServerNamesHashMaxSize, HealthStatus: healthStatus}
+		var cfg *NginxMainConfig
+		switch cfgType {
+		case ServiceCfg:
+			cfg = &NginxMainConfig{DefaultHTTPServer: false}
+		case IngressCfg:
+			createDir(ngxc.nginxCertsPath)
+			cfg = &NginxMainConfig{DefaultHTTPServer: true}
+			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultConfig().MainServerNamesHashMaxSize
+			cfg.HTTPContext.HealthStatus = healthStatus
+		}
 		ngxc.UpdateMainConfigFile(cfg)
 	}
 	return &ngxc, nil
