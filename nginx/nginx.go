@@ -26,6 +26,8 @@ type NginxController struct {
 	nginxConfdPath string
 	nginxCertsPath string
 	local          bool
+	cfgType        Configuration
+	mainCfg        *NginxMainConfig
 }
 
 // IngressNginxConfig describes an NGINX configuration Ingress Resource handling
@@ -140,50 +142,53 @@ type NginxMainHTTPConfig struct {
 
 // ServiceNginxConfig describes an NGINX configuration for Service LoadBalancing
 type ServiceNginxConfig struct {
+	Resolver  string
 	Upstreams []StreamUpstream
 	Servers   []StreamServer
 }
 
 // StreamUpstream describes an NGINX upstream (context stream)
 // http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#upstream
+// The 'hash' directive is not supported in the 'upstream' context currently.
 type StreamUpstream struct {
 	Name            string
+	Algorithm       string
+	LeastTimeMethod string
 	UpstreamServers []StreamUpstreamServer
 }
 
 // StreamUpstreamServer describes a server in an NGINX upstream (context stream::upstream)
 // http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#server
+// The following 'server' directive parameters are ommitted, as they are only available in NGINX Plus
+// - Resolve   bool
+// - Service   string
+// - SlowStart string
 type StreamUpstreamServer struct {
 	Address     string // "The address can be specified as a domain name or IP address with an obligatory port"
-	Weight      int
-	MaxConns    int
-	MaxFails    int
-	FailTimeout int
+	Weight      string
+	MaxConns    string
+	MaxFails    string
+	FailTimeout string
 	Backup      bool
 	Down        bool
-	Resolve     bool
-	Service     string
-	SlowStart   int
 }
 
 // StreamServer describes an NGINX Server (context stream)
 // http://nginx.org/en/docs/stream/ngx_stream_core_module.html#server
 type StreamServer struct {
 	Listen               StreamListen
-	ProxyProtocolTimeout int
-	Resolver             string
-	ResolverTimeout      int
+	ProxyProtocol        bool
+	ProxyProtocolTimeout string
+	ProxyPassAddress     string
 }
 
 // StreamListen describes an NGINX server listener (context stream::server)
 // http://nginx.org/en/docs/stream/ngx_stream_core_module.html#listen
 type StreamListen struct {
-	Address       string
-	Port          int
-	SSL           bool
-	UDP           bool
-	ProxyProtocol bool
-	// other fields ommitted, e.g backlog ... so_keepalive
+	Address string
+	Port    string
+	UDP     bool
+	// other fields ommitted, e.g SSL, backlog, ... so_keepalive
 }
 
 // NewUpstreamWithDefaultServer creates an upstream with the default server.
@@ -197,6 +202,7 @@ func NewUpstreamWithDefaultServer(name string) Upstream {
 }
 
 // NewStreamUpstreamWithDefaultServer creates an upstream with the default server.
+// Do not initialize Algorithm or LeastTimeMethod!
 func NewStreamUpstreamWithDefaultServer(name string) StreamUpstream {
 	return StreamUpstream{
 		Name:            name,
@@ -215,6 +221,8 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
 		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
 		local:          local,
+		cfgType:        cfgType,
+		mainCfg:        nil,
 	}
 
 	if !local {
@@ -240,7 +248,8 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultConfig().MainServerNamesHashMaxSize
 			cfg.HTTPContext.HealthStatus = healthStatus
 		}
-		ngxc.UpdateMainConfigFile(cfg)
+		ngxc.mainCfg = cfg
+		ngxc.UpdateMainConfigFile()
 	}
 	return &ngxc, nil
 }
@@ -433,7 +442,7 @@ func shellOut(cmd string) (err error) {
 }
 
 // UpdateMainConfigFile update the main NGINX configuration file
-func (nginx *NginxController) UpdateMainConfigFile(cfg *NginxMainConfig) {
+func (ngxc *NginxController) UpdateMainConfigFile() {
 	tmpl, err := template.New("nginx.conf.tmpl").ParseFiles("nginx.conf.tmpl")
 	if err != nil {
 		glog.Fatalf("Failed to parse the main config template file: %v", err)
@@ -443,17 +452,17 @@ func (nginx *NginxController) UpdateMainConfigFile(cfg *NginxMainConfig) {
 	glog.V(3).Infof("Writing NGINX conf to %v", filename)
 
 	if glog.V(3) {
-		tmpl.Execute(os.Stdout, cfg)
+		tmpl.Execute(os.Stdout, ngxc.mainCfg)
 	}
 
-	if !nginx.local {
+	if !ngxc.local {
 		w, err := os.Create(filename)
 		if err != nil {
 			glog.Fatalf("Failed to open %v: %v", filename, err)
 		}
 		defer w.Close()
 
-		if err := tmpl.Execute(w, cfg); err != nil {
+		if err := tmpl.Execute(w, ngxc.mainCfg); err != nil {
 			glog.Fatalf("Failed to write template %v", err)
 		}
 	}
