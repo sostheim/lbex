@@ -36,6 +36,9 @@ const (
 
 	// LBEXHostKey - the load balancer hostname
 	LBEXHostKey = "loadbalancer.lbex/host"
+
+	// LBEXResolverKey - DNS Resolver for DNS based service names (if any)
+	LBEXResolverKey = "loadbalancer.lbex/resolver"
 )
 
 // serviceAnnotations - map of key:value annotations discoverd for LBEX
@@ -191,6 +194,18 @@ func GetAlgorithm(obj interface{}) (string, bool) {
 // or not the value was present
 func GetHost(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXHostKey, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// GetResolver returns the string value of the annotations, or the
+// empty string if not present, and a bool to indicate wether
+// or not the value was present
+func GetResolver(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXResolverKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
 		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 		return "", false

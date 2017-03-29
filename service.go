@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/sostheim/lbex/annotations"
+
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 )
@@ -61,6 +63,25 @@ func (s serviceByName) Swap(i, j int) {
 }
 func (s serviceByName) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
+}
+
+// ValidateServiceObject returns true iff:
+// - the object is of a valid v1 API Service object
+// - is a service type we provide load balancing for
+// - has a valid annotation indicating
+// returns false otherwise
+func ValidateServiceObject(obj interface{}) bool {
+	err := ValidateServiceObjectType(obj)
+	if err != nil {
+		return false
+	}
+	if !IsValidServiceType(obj) {
+		return false
+	}
+	if !annotations.IsValid(obj) {
+		return false
+	}
+	return true
 }
 
 // ValidateServiceObjectType return wether or not the given object
@@ -110,6 +131,51 @@ func ServiceTypeLoadBalancer(obj interface{}) bool {
 		return false
 	}
 	return serviceType == string(api.ServiceTypeLoadBalancer)
+}
+
+// ServiceTypeNodePort returns true iff "Type: NodePort"
+func ServiceTypeNodePort(obj interface{}) bool {
+	serviceType, err := GetServiceType(obj)
+	if err != nil {
+		return false
+	}
+	return serviceType == string(api.ServiceTypeNodePort)
+}
+
+// ServiceTypeClusterIP returns true iff "Type: ClusterIP"
+func ServiceTypeClusterIP(obj interface{}) bool {
+	serviceType, err := GetServiceType(obj)
+	if err != nil {
+		return false
+	}
+	return serviceType == string(api.ServiceTypeClusterIP)
+}
+
+// ServiceTypeExternalName returns true iff "Type: ExternalName"
+func ServiceTypeExternalName(obj interface{}) bool {
+	serviceType, err := GetServiceType(obj)
+	if err != nil {
+		return false
+	}
+	return serviceType == string(api.ServiceTypeExternalName)
+}
+
+// ServiceTypeHeadless returns true iff "Type: NodNoneePort"
+func ServiceTypeHeadless(obj interface{}) bool {
+	serviceType, err := GetServiceType(obj)
+	if err != nil {
+		return false
+	}
+	// TODO: this should actually be spec.ClusterIP == None
+	return serviceType == "None"
+}
+
+// IsValidServiceType returns true iff ServiceType is supported for external load balancing
+func IsValidServiceType(obj interface{}) bool {
+	if ServiceTypeNodePort(obj) || ServiceTypeLoadBalancer(obj) {
+		return true
+	}
+	return false
 }
 
 // GetServicePortTargetPortInt returns the numeric value of TargetPort

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/sostheim/lbex/annotations"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
@@ -224,29 +225,25 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 	return IngressNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cfgtor *Configurator) generateNginxServiceCfg(svc *ServiceSpec) ServiceNginxConfig {
-	svcCfg := cfgtor.createServiceConfig(svc)
-	svcCfg.MainLogFormat = ""
-
+func (cfgtor *Configurator) generateNginxServiceCfg(svc *ServiceSpec) (svcConfig ServiceNginxConfig) {
+	if val, ok := annotations.GetResolver(svc.Service); ok {
+		svcConfig.Resolver = val
+	}
 	upstreams := make(map[string]StreamUpstream)
-
-	name := getNameForStreamUpstream(svc.Service, emptyHost)
-	upstream := cfgtor.createStreamUpstream(svc, name)
-	upstreams[name] = upstream
-
-	var servers []StreamServer
+	upstream := cfgtor.createStreamUpstream(svc)
+	upstreams[upstream.Name] = upstream
 
 	for _, servicePort := range svc.Service.Spec.Ports {
-
 		portName := servicePort.Name
-
 		server := StreamServer{
 			Listen: StreamListen{Address: portName},
 		}
-		servers = append(servers, server)
+		svcConfig.Servers = append(svcConfig.Servers, server)
 	}
 
-	return ServiceNginxConfig{Upstreams: streamUpstreamMapToSlice(upstreams), Servers: servers}
+	svcConfig.Upstreams = streamUpstreamMapToSlice(upstreams)
+
+	return
 }
 
 func (cfgtor *Configurator) createIngressConfig(ingEx *IngressEx) HTTPConfig {
@@ -362,12 +359,6 @@ func (cfgtor *Configurator) createIngressConfig(ingEx *IngressEx) HTTPConfig {
 	return ingCfg
 }
 
-/* FIXME Next ! */
-func (cfgtor *Configurator) createServiceConfig(svc *ServiceSpec) HTTPConfig {
-	svcCfg := *cfgtor.config
-	return svcCfg
-}
-
 func getWebsocketServices(ingEx *IngressEx) map[string]bool {
 	wsServices := make(map[string]bool)
 
@@ -466,7 +457,8 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 	return ups
 }
 
-func (cfgtor *Configurator) createStreamUpstream(svc *ServiceSpec, name string) StreamUpstream {
+func (cfgtor *Configurator) createStreamUpstream(svc *ServiceSpec) StreamUpstream {
+	name := getNameForStreamUpstream(svc.Service, emptyHost)
 	su := NewStreamUpstreamWithDefaultServer(name)
 
 	endps, exists := svc.Endpoints[svc.Service.Namespace+"/"+svc.Service.Name]

@@ -68,7 +68,7 @@ type lbExController struct {
 
 	stopCh chan struct{}
 
-	cnf *nginx.Configurator
+	cfgtor *nginx.Configurator
 }
 
 func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, service *string) *lbExController {
@@ -82,7 +82,7 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 	ngxc.Start()
 
 	config := nginx.NewDefaultConfig()
-	cnftor := nginx.NewConfigurator(ngxc, config)
+	configtor := nginx.NewConfigurator(ngxc, config)
 
 	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")
 
@@ -92,7 +92,7 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
 		service:   *service,
-		cnf:       cnftor,
+		cfgtor:    configtor,
 	}
 	lbexc.servicesQueue = NewTaskQueue(lbexc.syncServices)
 	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
@@ -123,19 +123,31 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
+		return err
+	}
+
+	err = ValidateServiceObjectType(storeObj)
+	if err != nil {
+		glog.V(3).Infof("syncServices: ValidateServiceObjectType(): err: %v", err)
+		return err
+	}
+
+	if !exists {
 		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
-		lbex.cnf.DeleteConfiguration(key)
-	} else if exists {
-		glog.V(3).Infof("syncServices: updating services for key: %s", key)
-		glog.V(4).Infof("syncServices: updating services object %v", storeObj)
-		udpSvc, tcpSvc := lbex.getServices()
+		lbex.cfgtor.DeleteConfiguration(key)
+	} else {
+		glog.V(3).Infof("syncServices: checking service update for key: %s", key)
+		tcpSvc, udpSvc := lbex.getService(key)
 		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
 			glog.V(3).Info("syncServices: no services currently match criteria")
-		} else {
-			glog.V(3).Infof("syncServices: triggering configuration event for\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
+			return nil
 		}
-	} else {
-		glog.V(3).Infof("syncServices: unable to find cached service object for key value: %s", key)
+		svcSpec := &nginx.ServiceSpec{
+			Key:     key,
+			Service: storeObj.(*v1.Service),
+		}
+		glog.V(2).Infof("syncServices: add/update service: %v\n", key)
+		lbex.cfgtor.AddOrUpdateService(key, svcSpec)
 	}
 	return nil
 }
@@ -148,13 +160,18 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 
 	key, ok := obj.(string)
 	if !ok {
-		return errors.New("syncEndpoints: invalid conversion from object any to key string")
+		return errors.New("syncEndpoints: key string type assertion failed")
 	}
 
 	storeObj, exists, err := lbex.endpointStore.GetByKey(key)
 	if err != nil {
 		return err
-	} else if exists {
+	}
+	if !exists {
+		glog.V(2).Infof("syncEndpoints: deleting removed endpoint: %v\n", key)
+		// TODO, need a service object here...
+		lbex.cfgtor.UpdateServiceEndpoints(key, nil)
+	} else {
 		glog.V(3).Infof("syncEndpoints: updating endpoints for key %s", key)
 		glog.V(4).Infof("syncEndpoints: updating endpoint object %v", storeObj)
 		udpSvc, tcpSvc := lbex.getServices()
@@ -163,13 +180,11 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 		} else {
 			glog.V(3).Infof("syncEndpoints: triggering configuration event for:\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
 		}
-	} else {
-		glog.V(3).Infof("syncEndpoints: unable to find cachd endpoint object for key value: %s", key)
 	}
 	return nil
 }
 
-// getServiceEndpoints returns the endpoints for the specified service name / namesapce.
+// getServiceEndpoints returns the endpoints v1 api object for the specified service name / namesapce.
 func (lbex *lbExController) getServiceEndpoints(service *v1.Service) (endpoints v1.Endpoints, err error) {
 	for _, ep := range lbex.endpointStore.List() {
 		endpoints = *ep.(*v1.Endpoints)
@@ -222,78 +237,91 @@ func (lbex *lbExController) getEndpoints(service *v1.Service, servicePort *v1.Se
 	return
 }
 
-// getServices returns a list of services and their endpoints.
+// getServices returns a list of TCP and UDP services
 func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []Service) {
 	objects := lbex.servicesStore.List()
 	for _, obj := range objects {
-		err := ValidateServiceObjectType(obj)
+		if !ValidateServiceObject(obj) {
+			glog.V(3).Info("getServices: ValidateServiceObject(): false")
+			continue
+		}
+		namespace, err := GetServiceNamespace(obj)
 		if err != nil {
-			glog.V(3).Infof("getServices: ValidateServiceObjectType(): err: %v", err)
 			continue
 		}
-
-		serviceName, _ := GetServiceName(obj)
-		if lbex.service != "" && lbex.service != serviceName {
-			glog.V(3).Infof("getServices: ignoring non-matching service name: %s", serviceName)
+		serviceName, err := GetServiceName(obj)
+		if err != nil {
 			continue
 		}
+		svcTCPServices, svcUDPServices := lbex.getService(namespace + "/" + serviceName)
+		tcpServices = append(tcpServices, svcTCPServices...)
+		udpServices = append(udpServices, svcUDPServices...)
+	}
 
-		if ServiceTypeLoadBalancer(obj) {
-			glog.V(3).Infof("getServices: service: %s, has 'Type: LoadBalancer' - skipping", serviceName)
+	sort.Sort(serviceByName(tcpServices))
+	sort.Sort(serviceByName(udpServices))
+
+	return
+}
+
+// getService returns a services and it's endpoints.
+func (lbex *lbExController) getService(key string) (tcpServices []Service, udpServices []Service) {
+	obj, exists, err := lbex.servicesStore.GetByKey(key)
+	if err != nil || !exists {
+		return nil, nil
+	}
+
+	if !ValidateServiceObject(obj) {
+		glog.V(3).Infof("getService: can't validtes service object name: %s", key)
+		return nil, nil
+	}
+
+	serviceName, _ := GetServiceName(obj)
+	if lbex.service != "" && lbex.service != serviceName {
+		glog.V(3).Infof("getService: ignoring non-matching service name: %s", serviceName)
+		return nil, nil
+	}
+
+	service, _ := obj.(*v1.Service)
+
+	ep := []string{}
+	for _, servicePort := range service.Spec.Ports {
+
+		ep = lbex.getEndpoints(service, &servicePort)
+		if len(ep) == 0 {
+			glog.V(3).Infof("getService: no endpoints found for service %s, port %+d", service.Name, servicePort)
 			continue
 		}
-		// Only services with the appropriate annotations are candidates
-		if !annotations.IsValid(obj) {
-			glog.V(3).Infof("getServices: service: %s, ignoring missing or non-matching loadbalancer.class", serviceName)
-			continue
+		backendPort, _ := GetServicePortTargetPortInt(&servicePort)
+		newSvc := Service{
+			Name:        GetServiceNameForLBRule(serviceName, int(servicePort.Port)),
+			Ep:          ep,
+			BackendPort: backendPort,
 		}
 
-		service, ok := obj.(*v1.Service)
-		if !ok {
-			glog.Warningf("getServices: service: %s, only V1 objects currently supported!", serviceName)
-			continue
+		if val, ok := annotations.GetHost(service); ok {
+			newSvc.Host = val
 		}
 
-		ep := []string{}
-		for _, servicePort := range service.Spec.Ports {
-
-			ep = lbex.getEndpoints(service, &servicePort)
-			if len(ep) == 0 {
-				glog.V(3).Infof("getServices: no endpoints found for service %s, port %+d", service.Name, servicePort)
-				continue
-			}
-			backendPort, _ := GetServicePortTargetPortInt(&servicePort)
-			newSvc := Service{
-				Name:        GetServiceNameForLBRule(serviceName, int(servicePort.Port)),
-				Ep:          ep,
-				BackendPort: backendPort,
-			}
-
-			if val, ok := annotations.GetHost(service); ok {
-				newSvc.Host = val
-			}
-
-			if val, ok := annotations.GetAlgorithm(service); ok {
-				for _, current := range supportedAlgorithms {
-					if val == current {
-						newSvc.Algorithm = val
-						break
-					}
+		if val, ok := annotations.GetAlgorithm(service); ok {
+			for _, current := range supportedAlgorithms {
+				if val == current {
+					newSvc.Algorithm = val
+					break
 				}
-			} else {
-				newSvc.Algorithm = defaultAlgorithm
 			}
-			newSvc.FrontendPort = int(servicePort.Port)
+		} else {
+			newSvc.Algorithm = defaultAlgorithm
+		}
+		newSvc.FrontendPort = int(servicePort.Port)
 
-			if servicePort.Protocol == v1.ProtocolUDP {
-				udpServices = append(udpServices, newSvc)
-			} else {
-				tcpServices = append(tcpServices, newSvc)
-			}
-
-			glog.V(3).Infof("getServices: lbex supported service: %+v", newSvc)
+		if servicePort.Protocol == v1.ProtocolUDP {
+			udpServices = append(udpServices, newSvc)
+		} else {
+			tcpServices = append(tcpServices, newSvc)
 		}
 
+		glog.V(3).Infof("getService: lbex supported service: %+v", newSvc)
 	}
 
 	sort.Sort(serviceByName(tcpServices))
