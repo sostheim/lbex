@@ -1,6 +1,7 @@
 package nginx
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,51 +16,63 @@ const emptyHost = ""
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
 type Configurator struct {
-	nginx  *NginxController
-	config *Config
+	ngxc   *NginxController
+	config *HTTPConfig
 	lock   sync.Mutex
 }
 
 // NewConfigurator creates a new Configurator
-func NewConfigurator(nginx *NginxController, config *Config) *Configurator {
-	cnf := Configurator{
-		nginx:  nginx,
+func NewConfigurator(ngxc *NginxController, config *HTTPConfig) *Configurator {
+	cfgtor := Configurator{
+		ngxc:   ngxc,
 		config: config,
 	}
-
-	return &cnf
+	return &cfgtor
 }
 
-func (cnf *Configurator) AddOrUpdateDHParam(content string) (string, error) {
-	return cnf.nginx.AddOrUpdateDHParam(content)
+func (cfgtor *Configurator) AddOrUpdateDHParam(content string) (string, error) {
+	if cfgtor.ngxc.cfgType != IngressCfg {
+		return "", errors.New("AddOrUpdateDHParam: I'm sorry Dave, I'm afraid I can't do that.")
+	}
+	return cfgtor.ngxc.AddOrUpdateDHParam(content)
 }
 
 // AddOrUpdateIngress adds or updates NGINX configuration for an Ingress resource
-func (cnf *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) {
-	cnf.lock.Lock()
-	defer cnf.lock.Unlock()
+func (cfgtor *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) error {
+	if cfgtor.ngxc.cfgType != IngressCfg {
+		return errors.New("AddOrUpdateIngress: I'm sorry Dave, I'm afraid I can't do that.")
+	}
 
-	pems := cnf.updateCertificates(ingEx)
-	nginxCfg := cnf.generateNginxIngressCfg(ingEx, pems)
-	cnf.nginx.AddOrUpdateIngress(name, nginxCfg)
-	if err := cnf.nginx.Reload(); err != nil {
+	cfgtor.lock.Lock()
+	defer cfgtor.lock.Unlock()
+
+	pems := cfgtor.updateCertificates(ingEx)
+	nginxCfg := cfgtor.generateNginxIngressCfg(ingEx, pems)
+	cfgtor.ngxc.AddOrUpdateIngress(name, nginxCfg)
+	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload adding or updating ingress %q: %q", name, err)
 	}
+	return nil
 }
 
 // AddOrUpdateService adds or updates NGINX configuration for an Service object
-func (cnf *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) {
-	cnf.lock.Lock()
-	defer cnf.lock.Unlock()
+func (cfgtor *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) error {
+	if cfgtor.ngxc.cfgType != ServiceCfg {
+		return errors.New("AddOrUpdateService: I'm sorry Dave, I'm afraid I can't do that.")
+	}
 
-	nginxCfg := cnf.generateNginxServiceCfg(svc)
-	cnf.nginx.AddOrUpdateService(name, nginxCfg)
-	if err := cnf.nginx.Reload(); err != nil {
+	cfgtor.lock.Lock()
+	defer cfgtor.lock.Unlock()
+
+	nginxCfg := cfgtor.generateNginxServiceCfg(svc)
+	cfgtor.ngxc.AddOrUpdateService(name, nginxCfg)
+	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload adding or updating service %q: %q", name, err)
 	}
+	return nil
 }
 
-func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string {
+func (cfgtor *Configurator) updateCertificates(ingEx *IngressEx) map[string]string {
 	pems := make(map[string]string)
 
 	for _, tls := range ingEx.Ingress.Spec.TLS {
@@ -80,7 +93,7 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 		}
 
 		name := ingEx.Ingress.Namespace + "-" + secretName
-		pemFileName := cnf.nginx.AddOrUpdateCertAndKey(name, string(cert), string(key))
+		pemFileName := cfgtor.ngxc.AddOrUpdateCertAndKey(name, string(cert), string(key))
 
 		for _, host := range tls.Hosts {
 			pems[host] = pemFileName
@@ -93,8 +106,8 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 	return pems
 }
 
-func (cnf *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[string]string) IngressNginxConfig {
-	ingCfg := cnf.createIngressConfig(ingEx)
+func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[string]string) IngressNginxConfig {
+	ingCfg := cfgtor.createIngressConfig(ingEx)
 
 	upstreams := make(map[string]Upstream)
 
@@ -104,7 +117,7 @@ func (cnf *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[stri
 
 	if ingEx.Ingress.Spec.Backend != nil {
 		name := getNameForUpstream(ingEx.Ingress, emptyHost, ingEx.Ingress.Spec.Backend.ServiceName)
-		upstream := cnf.createUpstream(ingEx, name, ingEx.Ingress.Spec.Backend, ingEx.Ingress.Namespace)
+		upstream := cfgtor.createUpstream(ingEx, name, ingEx.Ingress.Spec.Backend, ingEx.Ingress.Namespace)
 		upstreams[name] = upstream
 	}
 
@@ -151,7 +164,7 @@ func (cnf *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[stri
 			upsName := getNameForUpstream(ingEx.Ingress, rule.Host, path.Backend.ServiceName)
 
 			if _, exists := upstreams[upsName]; !exists {
-				upstream := cnf.createUpstream(ingEx, upsName, &path.Backend, ingEx.Ingress.Namespace)
+				upstream := cfgtor.createUpstream(ingEx, upsName, &path.Backend, ingEx.Ingress.Namespace)
 				upstreams[upsName] = upstream
 			}
 
@@ -211,14 +224,14 @@ func (cnf *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[stri
 	return IngressNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cnf *Configurator) generateNginxServiceCfg(svc *ServiceSpec) ServiceNginxConfig {
-	svcCfg := cnf.createServiceConfig(svc)
+func (cfgtor *Configurator) generateNginxServiceCfg(svc *ServiceSpec) ServiceNginxConfig {
+	svcCfg := cfgtor.createServiceConfig(svc)
 	svcCfg.MainLogFormat = ""
 
 	upstreams := make(map[string]StreamUpstream)
 
 	name := getNameForStreamUpstream(svc.Service, emptyHost)
-	upstream := cnf.createStreamUpstream(svc, name)
+	upstream := cfgtor.createStreamUpstream(svc, name)
 	upstreams[name] = upstream
 
 	var servers []StreamServer
@@ -236,8 +249,8 @@ func (cnf *Configurator) generateNginxServiceCfg(svc *ServiceSpec) ServiceNginxC
 	return ServiceNginxConfig{Upstreams: streamUpstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cnf *Configurator) createIngressConfig(ingEx *IngressEx) Config {
-	ingCfg := *cnf.config
+func (cfgtor *Configurator) createIngressConfig(ingEx *IngressEx) HTTPConfig {
+	ingCfg := *cfgtor.config
 	if serverTokens, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/server-tokens", ingEx.Ingress); exists {
 		if err != nil {
 			glog.Error(err)
@@ -349,8 +362,9 @@ func (cnf *Configurator) createIngressConfig(ingEx *IngressEx) Config {
 	return ingCfg
 }
 
-func (cnf *Configurator) createServiceConfig(svc *ServiceSpec) Config {
-	svcCfg := *cnf.config
+/* FIXME Next ! */
+func (cfgtor *Configurator) createServiceConfig(svc *ServiceSpec) HTTPConfig {
+	svcCfg := *cfgtor.config
 	return svcCfg
 }
 
@@ -414,7 +428,7 @@ func getSSLServices(ingEx *IngressEx) map[string]bool {
 	return sslServices
 }
 
-func createLocation(path string, upstream Upstream, cfg *Config, websocket bool, rewrite string, ssl bool) Location {
+func createLocation(path string, upstream Upstream, cfg *HTTPConfig, websocket bool, rewrite string, ssl bool) Location {
 	loc := Location{
 		Path:                 path,
 		Upstream:             upstream,
@@ -434,7 +448,7 @@ func createLocation(path string, upstream Upstream, cfg *Config, websocket bool,
 	return loc
 }
 
-func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
+func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
 	ups := NewUpstreamWithDefaultServer(name)
 
 	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
@@ -452,7 +466,7 @@ func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *
 	return ups
 }
 
-func (cnf *Configurator) createStreamUpstream(svc *ServiceSpec, name string) StreamUpstream {
+func (cfgtor *Configurator) createStreamUpstream(svc *ServiceSpec, name string) StreamUpstream {
 	su := NewStreamUpstreamWithDefaultServer(name)
 
 	endps, exists := svc.Endpoints[svc.Service.Namespace+"/"+svc.Service.Name]
@@ -501,39 +515,53 @@ func streamUpstreamMapToSlice(upstreams map[string]StreamUpstream) []StreamUpstr
 }
 
 // DeleteConfiguration deletes NGINX configuration for an Ingress Resource or Service LoadBalancer
-func (cnf *Configurator) DeleteConfiguration(name string) {
-	cnf.lock.Lock()
-	defer cnf.lock.Unlock()
+func (cfgtor *Configurator) DeleteConfiguration(name string) {
+	cfgtor.lock.Lock()
+	defer cfgtor.lock.Unlock()
 
-	cnf.nginx.DeleteConfiguration(name)
-	if err := cnf.nginx.Reload(); err != nil {
+	cfgtor.ngxc.DeleteConfiguration(name)
+	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload, removing configuration: %q: %q", name, err)
 	}
 }
 
-// UpdateEndpoints updates endpoints in NGINX configuration for an Ingress resource
-func (cnf *Configurator) UpdateEndpoints(name string, ingEx *IngressEx) {
-	cnf.AddOrUpdateIngress(name, ingEx)
+// UpdateIngressEndpoints updates endpoints in NGINX configuration for an Ingress resource
+func (cfgtor *Configurator) UpdateIngressEndpoints(name string, ingEx *IngressEx) error {
+	if cfgtor.ngxc.cfgType != IngressCfg {
+		return errors.New("UpdateIngressEndpoints: I'm sorry Dave, I'm afraid I can't do that.")
+	}
+	cfgtor.AddOrUpdateIngress(name, ingEx)
+	return nil
 }
 
-// UpdateConfig updates NGINX Configuration parameters
-func (cnf *Configurator) UpdateConfig(config *Config) {
-	cnf.lock.Lock()
-	defer cnf.lock.Unlock()
-
-	cnf.config = config
-	mainCfg := &NginxMainConfig{
-		HTTPContext: NginxMainHTTPConfig{
-			HTTPSnippets:              config.MainHTTPSnippets,
-			ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
-			ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,
-			LogFormat:                 config.MainLogFormat,
-			SSLProtocols:              config.MainServerSSLProtocols,
-			SSLCiphers:                config.MainServerSSLCiphers,
-			SSLDHParam:                config.MainServerSSLDHParam,
-			SSLPreferServerCiphers:    config.MainServerSSLPreferServerCiphers,
-		},
+// UpdateServiceEndpoints updates endpoints in NGINX configuration for a Service
+func (cfgtor *Configurator) UpdateServiceEndpoints(name string, svc *ServiceSpec) error {
+	if cfgtor.ngxc.cfgType != ServiceCfg {
+		return errors.New("UpdateIngressEndpoints: I'm sorry Dave, I'm afraid I can't do that.")
 	}
+	cfgtor.AddOrUpdateService(name, svc)
+	return nil
+}
 
-	cnf.nginx.UpdateMainConfigFile(mainCfg)
+// UpdateMainConfigHTTPContext updates NGINX Configuration parameters
+func (cfgtor *Configurator) UpdateMainConfigHTTPContext(config *HTTPConfig) error {
+	if cfgtor.ngxc.cfgType != IngressCfg {
+		return errors.New("UpdateMainConfig: I'm sorry Dave, I'm afraid I can't do that.")
+	}
+	cfgtor.lock.Lock()
+	defer cfgtor.lock.Unlock()
+
+	cfgtor.config = config
+	cfgtor.ngxc.mainCfg.HTTPContext = NginxMainHTTPConfig{
+		HTTPSnippets:              config.MainHTTPSnippets,
+		ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
+		ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,
+		LogFormat:                 config.MainLogFormat,
+		SSLProtocols:              config.MainServerSSLProtocols,
+		SSLCiphers:                config.MainServerSSLCiphers,
+		SSLDHParam:                config.MainServerSSLDHParam,
+		SSLPreferServerCiphers:    config.MainServerSSLPreferServerCiphers,
+	}
+	cfgtor.ngxc.UpdateMainConfigFile()
+	return nil
 }

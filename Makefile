@@ -22,4 +22,4 @@ clean:
 	rm -f lbex
 	rm -f osx-lbex
 
-.PHONY: all container push clean
+.PHONY: all lbex osx-lbex container push clean

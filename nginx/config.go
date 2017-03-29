@@ -1,7 +1,7 @@
 package nginx
 
-// Config holds NGINX configuration parameters for an 'http' context
-type Config struct {
+// HTTPConfig holds NGINX configuration parameters for an 'http' context
+type HTTPConfig struct {
 	// Context: http directives
 	LocationSnippets              []string
 	ServerSnippets                []string
@@ -39,8 +39,8 @@ type Config struct {
 }
 
 // NewDefaultConfig creates a Config with default values
-func NewDefaultConfig() *Config {
-	return &Config{
+func NewDefaultConfig() *HTTPConfig {
+	return &HTTPConfig{
 		ServerTokens:               true,
 		ProxyConnectTimeout:        "60s",
 		ProxyReadTimeout:           "60s",
