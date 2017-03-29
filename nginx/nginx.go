@@ -224,7 +224,12 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 			ErrorLogLevel:   "warn",
 			PidFile:         "/var/run/nginx.pid",
 			User:            "nginx",
+			Group:           "nginx",
 			WorkerProcesses: "2",
+			/* For future use potentially, can be scrubbed if prefered.
+			Environment: map[string]string{
+				"OPENSSL_ALLOW_PROXY_CERTS": "1",
+			}, */
 		}
 		switch cfgType {
 		case ServiceCfg:
