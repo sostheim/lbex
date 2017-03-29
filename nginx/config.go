@@ -1,6 +1,6 @@
 package nginx
 
-// Config holds NGINX configuration parameters
+// Config holds NGINX configuration parameters for an 'http' context
 type Config struct {
 	// Context: http directives
 	LocationSnippets              []string

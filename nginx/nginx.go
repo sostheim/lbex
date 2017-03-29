@@ -218,13 +218,20 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 	}
 
 	if !local {
-		var cfg *NginxMainConfig
+		cfg := &NginxMainConfig{
+			Daemon:          true,
+			ErrorLogFile:    "/var/log/nginx/error.log",
+			ErrorLogLevel:   "warn",
+			PidFile:         "/var/run/nginx.pid",
+			User:            "nginx",
+			WorkerProcesses: "2",
+		}
 		switch cfgType {
 		case ServiceCfg:
-			cfg = &NginxMainConfig{DefaultHTTPServer: false}
+			cfg.DefaultHTTPServer = false
 		case IngressCfg:
 			createDir(ngxc.nginxCertsPath)
-			cfg = &NginxMainConfig{DefaultHTTPServer: true}
+			cfg.DefaultHTTPServer = true
 			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultConfig().MainServerNamesHashMaxSize
 			cfg.HTTPContext.HealthStatus = healthStatus
 		}
