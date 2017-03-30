@@ -3,20 +3,19 @@
 {{/* */}}
 stream {
 	{{- if .Resolver}}
-	resolver {{.Resolver}};{{end}}
+	resolver {{.Resolver}};{{end -}}
 	
 	{{range $upstream := .Upstreams}}
 	upstream {{$upstream.Name}} {
-		{{- if $upstream.Algorithm}}
+		{{if $upstream.Algorithm}}
     	{{$upstream.Algorithm}}{{if $upstream.LeastTimeMethod}} {{$upstream.LeastTimeMethod}}{{end}};{{end}}
 		{{range $srv := $upstream.UpstreamServers}}
-		server {{$srv.Address}}{{if $srv.Weight}} weight={{- $srv.Weight}}{{end}}{{if $srv.MaxConns}} max_conns={{- $srv.MaxConns}}{{end}}{{if $srv.MaxFails}} max_fails={{- $srv.MaxFails}}{{end}}{{if $srv.FailTimeout}} fail_timeout={{-$srv.FailTimeout}}{{end}}{{if $srv.Backup}} backup{{end}}{{if $srv.Down}} down{{end}};{{end}}
+		server {{$srv.Address}}{{if $srv.Weight}} weight={{- $srv.Weight}}{{end}}{{if $srv.MaxConns}} max_conns={{- $srv.MaxConns}}{{end}}{{if $srv.MaxFails}} max_fails={{- $srv.MaxFails}}{{end}}{{if $srv.FailTimeout}} fail_timeout={{- $srv.FailTimeout}}{{end}}{{if $srv.Backup}} backup{{end}}{{if $srv.Down}} down{{end}};{{end}}
 	}
-	{{end}}
-
+	{{end -}}
 	{{range $server := .Servers}}
 	server {
-		listen {{$server.Listen.Address}}{{if $server.Listen.Port}}:{{- $server.Listen.Port}}{{end}}{{if $server.Listen.SSL}} ssl{{end}}{{if $server.Listen.UDP}} udp{{end}};
+		listen {{if $server.Listen.Address}}{{$server.Listen.Address}}:{{end}}{{if $server.Listen.Port}}{{- $server.Listen.Port}}{{end}}{{if $server.Listen.UDP}} udp{{end}};
 		
 		{{- if $server.ProxyProtocol}} 
 		proxy_protocol on;{{end}}
@@ -24,7 +23,8 @@ stream {
 		{{- if $server.ProxyProtocolTimeout}}
 		proxy_timeout {{$server.ProxyProtocolTimeout}};{{end}}
 
-		proxy_pass {$server.ProxyPassAddress}}
+		proxy_pass {{$server.ProxyPassAddress}};
 	}
 	{{end}}
 }
+{{/* */}}

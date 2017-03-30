@@ -338,7 +338,8 @@ func (nginx *NginxController) getNginxConfigFileName(name string) string {
 func (nginx *NginxController) templateIngress(config IngressNginxConfig, filename string) {
 	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
 	if err != nil {
-		glog.Fatal("failed to parse ingress template file")
+		glog.Infof("templateIngress: template error: %v", err)
+		glog.Fatal("templateIngress: failed to parse ingress template file")
 	}
 
 	if glog.V(3) {
@@ -364,39 +365,40 @@ func (nginx *NginxController) templateIngress(config IngressNginxConfig, filenam
 func (nginx *NginxController) templateService(config ServiceNginxConfig, filename string) {
 	tmpl, err := template.New("service.tmpl").ParseFiles("service.tmpl")
 	if err != nil {
-		glog.Fatal("Failed to parse service template file")
+		glog.Infof("templateService: template error: %v", err)
+		glog.Fatal("templateService: failed to parse service template file")
 	}
 
 	if glog.V(3) {
-		glog.Infof("writing NGINX Service LoadBalancer configuration to %v", filename)
+		glog.Infof("templateService: writing NGINX Service LoadBalancer configuration to: %v", filename)
 		tmpl.Execute(os.Stdout, config)
 	}
 
 	if !nginx.local {
 		w, err := os.Create(filename)
 		if err != nil {
-			glog.Fatalf("failed to open %v: %v", filename, err)
+			glog.Fatalf("templateService: failed to open %v: %v", filename, err)
 		}
 		defer w.Close()
 
 		if err := tmpl.Execute(w, config); err != nil {
-			glog.Fatalf("failed to write template %v", err)
+			glog.Fatalf("templateService: failed to write template %v", err)
 		}
 	}
-	glog.V(3).Infof("NGINX Service LoadBalancer configuration file had been updated")
+	glog.V(3).Infof("templateService: NGINX Service LoadBalancer configuration file had been updated")
 }
 
 // Reload reloads NGINX
 func (nginx *NginxController) Reload() error {
 	if !nginx.local {
 		if err := shellOut("nginx -t"); err != nil {
-			return fmt.Errorf("Invalid nginx configuration detected, not reloading: %s", err)
+			return fmt.Errorf("Reload: Invalid nginx configuration detected, not reloading: %s", err)
 		}
 		if err := shellOut("nginx -s reload"); err != nil {
-			return fmt.Errorf("Reloading NGINX failed: %s", err)
+			return fmt.Errorf("Reload: Reloading NGINX failed: %s", err)
 		}
 	} else {
-		glog.V(3).Info("Reloading nginx")
+		glog.V(3).Info("Reload: Reloading nginx")
 	}
 	return nil
 }

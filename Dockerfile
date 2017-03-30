@@ -27,6 +27,12 @@ LABEL vendor="Samsung CNCT"
 RUN ln -sf /proc/1/fd/1 /var/log/nginx/access.log \
 	&& ln -sf /proc/1/fd/2 /var/log/nginx/error.log
 
-COPY lbex nginx/ingress.tmpl nginx/nginx.conf.tmpl /
+RUN rm /etc/nginx/conf.d/*
+
+# for troubleshooting, can be removed for production deployment
+RUN apt update
+RUN apt install netcat-openbsd net-tools iproute2 -y
+
+COPY lbex nginx/ingress.tmpl nginx/service.tmpl nginx/nginx.conf.tmpl /
 
 ENTRYPOINT ["/lbex"]

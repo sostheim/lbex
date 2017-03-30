@@ -34,6 +34,9 @@ const (
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
 
+	// LBEXMethodKey - Algorithm Least Time has an arugment "Method"
+	LBEXMethodKey = "loadbalancer.lbex/method"
+
 	// LBEXHostKey - the load balancer hostname
 	LBEXHostKey = "loadbalancer.lbex/host"
 
@@ -182,6 +185,18 @@ func GetIntAnnotation(name string, obj interface{}) (int, error) {
 // or not the value was present
 func GetAlgorithm(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXAlgorithmKey, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// GetMethod returns the string value of the annotations, or
+// the empty string if not present, and a bool to indicate wether
+// or not the value was present
+func GetMethod(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXMethodKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
 		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 		return "", false

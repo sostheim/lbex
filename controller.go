@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -104,14 +105,17 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 
 func (lbex *lbExController) run() {
 	// run the controller and queue goroutines
-	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
-	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
 	go lbex.endpointsQueue.Run(time.Second, lbex.stopCh)
+
+	// Allow time for the initial cache update for all endpoints to take place 1st
+	time.Sleep(5 * time.Second)
+	go lbex.servciesLWC.controller.Run(lbex.stopCh)
+	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
+
 }
 
 func (lbex *lbExController) syncServices(obj interface{}) error {
-
 	if lbex.servicesQueue.IsShuttingDown() {
 		return nil
 	}
@@ -120,40 +124,42 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 	if !ok {
 		return errors.New("syncServices: type assertion faild for key string")
 	}
+	// some-namespace/some-service -> some-namespace-some-service
+	filename := strings.Replace(key, "/", "-", -1)
 
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {
 		return err
 	}
-
-	err = ValidateServiceObjectType(storeObj)
-	if err != nil {
-		glog.V(3).Infof("syncServices: ValidateServiceObjectType(): err: %v", err)
-		return err
-	}
-
 	if !exists {
 		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
-		lbex.cfgtor.DeleteConfiguration(key)
+		lbex.cfgtor.DeleteConfiguration(filename)
 	} else {
-		glog.V(3).Infof("syncServices: checking service update for key: %s", key)
+		err = ValidateServiceObjectType(storeObj)
+		if err != nil {
+			glog.V(3).Infof("syncServices: ValidateServiceObjectType(): err: %v", err)
+			return err
+		}
+
+		glog.V(3).Infof("syncServices: checking service: %s", key)
 		tcpSvc, udpSvc := lbex.getService(key)
 		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
-			glog.V(3).Info("syncServices: no services currently match criteria")
+			glog.V(4).Infof("syncServices: %s: not an lbex manage service", key)
 			return nil
 		}
+		glog.V(3).Infof("syncServices: lbex managed service: %v", obj)
+		glog.V(4).Infof("syncServices: add/update lbex managed services:\nTCP Services:%v\nUDP Services: %v", tcpSvc, udpSvc)
 		svcSpec := &nginx.ServiceSpec{
 			Key:     key,
 			Service: storeObj.(*v1.Service),
 		}
-		glog.V(2).Infof("syncServices: add/update service: %v\n", key)
-		lbex.cfgtor.AddOrUpdateService(key, svcSpec)
+		glog.V(2).Infof("syncServices: add/update service: %s,\n%v", key, svcSpec)
+		lbex.cfgtor.AddOrUpdateService(filename, svcSpec)
 	}
 	return nil
 }
 
 func (lbex *lbExController) syncEndpoints(obj interface{}) error {
-
 	if lbex.endpointsQueue.IsShuttingDown() {
 		return nil
 	}
@@ -170,15 +176,15 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 	if !exists {
 		glog.V(2).Infof("syncEndpoints: deleting removed endpoint: %v\n", key)
 		// TODO, need a service object here...
-		lbex.cfgtor.UpdateServiceEndpoints(key, nil)
+		// lbex.cfgtor.UpdateServiceEndpoints(key, <future thing>)
 	} else {
-		glog.V(3).Infof("syncEndpoints: updating endpoints for key %s", key)
-		glog.V(4).Infof("syncEndpoints: updating endpoint object %v", storeObj)
-		udpSvc, tcpSvc := lbex.getServices()
+		glog.V(3).Infof("syncEndpoints: checking endpoints for key %s", key)
+		tcpSvc, udpSvc := lbex.getService(key)
 		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
-			glog.V(3).Info("syncEndpoints: no services currently match criteria")
+			glog.V(3).Info("syncEndpoints: not a lbex managed service endpoint")
 		} else {
-			glog.V(3).Infof("syncEndpoints: triggering configuration event for:\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
+			glog.V(4).Infof("syncEndpoints: lbex managed service endpoint object:\n%v", storeObj)
+			glog.V(4).Infof("syncEndpoints: add/update lbex managed service endpoint for:\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
 		}
 	}
 	return nil
@@ -242,7 +248,7 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 	objects := lbex.servicesStore.List()
 	for _, obj := range objects {
 		if !ValidateServiceObject(obj) {
-			glog.V(3).Info("getServices: ValidateServiceObject(): false")
+			glog.V(4).Info("getServices: ValidateServiceObject(): false")
 			continue
 		}
 		namespace, err := GetServiceNamespace(obj)
@@ -254,6 +260,8 @@ func (lbex *lbExController) getServices() (tcpServices []Service, udpServices []
 			continue
 		}
 		svcTCPServices, svcUDPServices := lbex.getService(namespace + "/" + serviceName)
+		glog.V(4).Info("getServices: : false")
+
 		tcpServices = append(tcpServices, svcTCPServices...)
 		udpServices = append(udpServices, svcUDPServices...)
 	}

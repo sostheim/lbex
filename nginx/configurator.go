@@ -3,6 +3,7 @@ package nginx
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,6 +15,38 @@ import (
 )
 
 const emptyHost = ""
+
+var (
+	nodeIPAddresses = []string{
+		"10.142.0.14",
+		"10.142.0.8",
+		"10.142.0.19",
+		"10.142.0.9",
+		"10.142.0.12",
+		"10.142.0.18",
+		"10.142.0.6",
+		"10.142.0.7",
+		"10.142.0.16",
+		"10.142.0.2",
+		"10.142.0.3",
+		"10.142.0.13",
+		"10.142.0.11",
+		"10.142.0.5",
+		"10.142.0.4",
+		"10.142.0.17",
+		"10.142.0.10",
+		"10.142.0.15",
+	}
+
+	supportedMethods = []string{
+		"connect",
+		"first_byte",
+		"last_byte",
+		"connect inflight",
+		"first_byte inflight",
+		"last_byte inflight",
+	}
+)
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
 type Configurator struct {
@@ -65,7 +98,7 @@ func (cfgtor *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) er
 	cfgtor.lock.Lock()
 	defer cfgtor.lock.Unlock()
 
-	nginxCfg := cfgtor.generateNginxServiceCfg(svc)
+	nginxCfg := cfgtor.generateServiceNginxConfig(svc)
 	cfgtor.ngxc.AddOrUpdateService(name, nginxCfg)
 	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload adding or updating service %q: %q", name, err)
@@ -225,24 +258,24 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 	return IngressNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cfgtor *Configurator) generateNginxServiceCfg(svc *ServiceSpec) (svcConfig ServiceNginxConfig) {
+func (cfgtor *Configurator) generateServiceNginxConfig(svc *ServiceSpec) (svcConfig ServiceNginxConfig) {
 	if val, ok := annotations.GetResolver(svc.Service); ok {
 		svcConfig.Resolver = val
 	}
-	upstreams := make(map[string]StreamUpstream)
-	upstream := cfgtor.createStreamUpstream(svc)
-	upstreams[upstream.Name] = upstream
+	for _, svcPort := range svc.Service.Spec.Ports {
+		upstream := cfgtor.createStreamUpstream(svc.Service, &svcPort)
+		svcConfig.Upstreams = append(svcConfig.Upstreams, upstream)
 
-	for _, servicePort := range svc.Service.Spec.Ports {
-		portName := servicePort.Name
 		server := StreamServer{
-			Listen: StreamListen{Address: portName},
+			Listen: StreamListen{
+				Port: strconv.Itoa(int(svcPort.Port)),
+				UDP:  (svcPort.Protocol == "upd" || svcPort.Protocol == "UDP"),
+			},
+			ProxyProtocol:    false,
+			ProxyPassAddress: upstream.Name,
 		}
 		svcConfig.Servers = append(svcConfig.Servers, server)
 	}
-
-	svcConfig.Upstreams = streamUpstreamMapToSlice(upstreams)
-
 	return
 }
 
@@ -453,25 +486,36 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 			ups.UpstreamServers = upsServers
 		}
 	}
-
 	return ups
 }
 
-func (cfgtor *Configurator) createStreamUpstream(svc *ServiceSpec) StreamUpstream {
-	name := getNameForStreamUpstream(svc.Service, emptyHost)
-	su := NewStreamUpstreamWithDefaultServer(name)
-
-	endps, exists := svc.Endpoints[svc.Service.Namespace+"/"+svc.Service.Name]
-	if exists {
-		var suServers []StreamUpstreamServer
-		for _, endp := range endps {
-			suServers = append(suServers, StreamUpstreamServer{Address: endp})
+func (cfgtor *Configurator) createStreamUpstream(svc *v1.Service, svcPort *v1.ServicePort) StreamUpstream {
+	name := getNameForStreamUpstream(svc, svcPort.Name)
+	var algo, method string
+	if val, ok := annotations.GetAlgorithm(svc); ok {
+		if val != "roundrobin" {
+			algo = val
 		}
-		if len(suServers) > 0 {
-			su.UpstreamServers = suServers
+		if algo == "least_time" {
+			if val, ok = annotations.GetMethod(svc); ok {
+				for _, current := range supportedMethods {
+					if val == current {
+						method = val
+						break
+					}
+				}
+			}
 		}
 	}
-
+	su := StreamUpstream{
+		Name:            name,
+		Algorithm:       algo,
+		LeastTimeMethod: method,
+	}
+	for _, address := range nodeIPAddresses {
+		sus := StreamUpstreamServer{Address: address + ":" + strconv.Itoa(int(svcPort.NodePort))}
+		su.UpstreamServers = append(su.UpstreamServers, sus)
+	}
 	return su
 }
 
@@ -486,20 +530,12 @@ func getNameForUpstream(ing *extensions.Ingress, host string, service string) st
 	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
 }
 
-func getNameForStreamUpstream(svc *v1.Service, host string) string {
-	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, host)
+func getNameForStreamUpstream(svc *v1.Service, portName string) string {
+	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, portName)
 }
 
 func upstreamMapToSlice(upstreams map[string]Upstream) []Upstream {
 	result := make([]Upstream, 0, len(upstreams))
-	for _, ups := range upstreams {
-		result = append(result, ups)
-	}
-	return result
-}
-
-func streamUpstreamMapToSlice(upstreams map[string]StreamUpstream) []StreamUpstream {
-	result := make([]StreamUpstream, 0, len(upstreams))
 	for _, ups := range upstreams {
 		result = append(result, ups)
 	}
