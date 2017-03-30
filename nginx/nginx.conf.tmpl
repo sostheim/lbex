@@ -47,7 +47,15 @@ events {
     {{- end}}
 }
 {{end}}
-{{- if .DefaultHTTPServer}}
+
+{{- if .DefaultStreamContext}}
+
+stream {
+    include /etc/nginx/conf.d/*.stream.conf;
+}
+{{end}}
+
+{{- if .DefaultHTTPContext}}
 
 http {
     {{with .HTTPContext}}
@@ -100,10 +108,12 @@ http {
     }
     {{end}}
 
-    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/conf.d/*.http.conf;
     {{end}}
 }
 {{end}}
 
-include /etc/nginx/conf.d/*.conf;
+
+
+
 

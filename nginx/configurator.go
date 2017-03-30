@@ -543,11 +543,15 @@ func upstreamMapToSlice(upstreams map[string]Upstream) []Upstream {
 }
 
 // DeleteConfiguration deletes NGINX configuration for an Ingress Resource or Service LoadBalancer
-func (cfgtor *Configurator) DeleteConfiguration(name string) {
+func (cfgtor *Configurator) DeleteConfiguration(name string, cfgType Configuration) {
 	cfgtor.lock.Lock()
 	defer cfgtor.lock.Unlock()
 
-	cfgtor.ngxc.DeleteConfiguration(name)
+	if cfgType == ServiceCfg {
+		cfgtor.ngxc.DeleteServiceConfiguration(name)
+	} else {
+		cfgtor.ngxc.DeleteIngressConfiguration(name)
+	}
 	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload, removing configuration: %q: %q", name, err)
 	}

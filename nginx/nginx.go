@@ -113,8 +113,9 @@ type NginxMainConfig struct {
 
 	EventContext NginxMainEventConfig
 
-	DefaultHTTPServer bool
-	HTTPContext       NginxMainHTTPConfig
+	DefaultStreamContext bool
+	DefaultHTTPContext   bool
+	HTTPContext          NginxMainHTTPConfig
 }
 
 // NginxMainEventConfig describe the main NGINX configuration file's 'events' context
@@ -241,10 +242,12 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 		}
 		switch cfgType {
 		case ServiceCfg:
-			cfg.DefaultHTTPServer = false
+			cfg.DefaultStreamContext = true
+			cfg.DefaultHTTPContext = false
 		case IngressCfg:
 			createDir(ngxc.nginxCertsPath)
-			cfg.DefaultHTTPServer = true
+			cfg.DefaultStreamContext = false
+			cfg.DefaultHTTPContext = true
 			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultConfig().MainServerNamesHashMaxSize
 			cfg.HTTPContext.HealthStatus = healthStatus
 		}
@@ -254,10 +257,23 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 	return &ngxc, nil
 }
 
-// DeleteConfiguration deletes the configuration file, which corresponds for the
+// DeleteServiceConfiguration deletes the configuration file, which corresponds for the
 // specified ingress resource / service load balancer from NGINX conf directory
-func (nginx *NginxController) DeleteConfiguration(name string) {
-	filename := nginx.getNginxConfigFileName(name)
+func (nginx *NginxController) DeleteServiceConfiguration(name string) {
+	filename := nginx.getNginxServiceConfigFileName(name)
+	glog.V(3).Infof("deleting %v", filename)
+
+	if !nginx.local {
+		if err := os.Remove(filename); err != nil {
+			glog.Warningf("Failed to delete %v: %v", filename, err)
+		}
+	}
+}
+
+// DeleteIngressConfiguration deletes the configuration file, which corresponds for the
+// specified ingress resource / service load balancer from NGINX conf directory
+func (nginx *NginxController) DeleteIngressConfiguration(name string) {
+	filename := nginx.getNginxIngressConfigFileName(name)
 	glog.V(3).Infof("deleting %v", filename)
 
 	if !nginx.local {
@@ -271,14 +287,14 @@ func (nginx *NginxController) DeleteConfiguration(name string) {
 // the specified configuration for the specified ingress
 func (nginx *NginxController) AddOrUpdateIngress(name string, config IngressNginxConfig) {
 	glog.V(3).Infof("Updating NGINX configuration for Ingress Resource")
-	filename := nginx.getNginxConfigFileName(name)
+	filename := nginx.getNginxIngressConfigFileName(name)
 	nginx.templateIngress(config, filename)
 }
 
 // AddOrUpdateService creates or updates a file with the specified service config
 func (nginx *NginxController) AddOrUpdateService(name string, config ServiceNginxConfig) {
 	glog.V(3).Infof("Updating NGINX configuration for Service LoadBalancer")
-	filename := nginx.getNginxConfigFileName(name)
+	filename := nginx.getNginxServiceConfigFileName(name)
 	nginx.templateService(config, filename)
 }
 
@@ -331,8 +347,12 @@ func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, ke
 	return pemFileName
 }
 
-func (nginx *NginxController) getNginxConfigFileName(name string) string {
-	return path.Join(nginx.nginxConfdPath, name+".conf")
+func (nginx *NginxController) getNginxServiceConfigFileName(name string) string {
+	return path.Join(nginx.nginxConfdPath, name+".stream.conf")
+}
+
+func (nginx *NginxController) getNginxIngressConfigFileName(name string) string {
+	return path.Join(nginx.nginxConfdPath, name+".http.conf")
 }
 
 func (nginx *NginxController) templateIngress(config IngressNginxConfig, filename string) {

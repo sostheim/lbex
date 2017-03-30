@@ -133,7 +133,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 	}
 	if !exists {
 		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
-		lbex.cfgtor.DeleteConfiguration(filename)
+		lbex.cfgtor.DeleteConfiguration(filename, nginx.ServiceCfg)
 	} else {
 		err = ValidateServiceObjectType(storeObj)
 		if err != nil {
