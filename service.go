@@ -115,7 +115,7 @@ func GetServiceNamespace(obj interface{}) (string, error) {
 	return string(service.Namespace), nil
 }
 
-// GetServiceType return validated service type's Tupe, error otherwise.
+// GetServiceType return validated service type's Type string, error otherwise.
 func GetServiceType(obj interface{}) (string, error) {
 	service, ok := obj.(*v1.Service)
 	if !ok {
@@ -160,19 +160,28 @@ func ServiceTypeExternalName(obj interface{}) bool {
 	return serviceType == string(api.ServiceTypeExternalName)
 }
 
-// ServiceTypeHeadless returns true iff "Type: NodNoneePort"
+// GetClusterIP returns the services cluster ip value as a string, or an error
+func GetClusterIP(obj interface{}) (string, error) {
+	service, ok := obj.(*v1.Service)
+	if !ok {
+		return "", errors.New("type assertion failure")
+	}
+	return string(service.Spec.ClusterIP), nil
+}
+
+// ServiceTypeHeadless returns true iff ClusterIP is set to "None"
 func ServiceTypeHeadless(obj interface{}) bool {
-	serviceType, err := GetServiceType(obj)
+	clusterIP, err := GetClusterIP(obj)
 	if err != nil {
 		return false
 	}
-	// TODO: this should actually be spec.ClusterIP == None
-	return serviceType == "None"
+	return clusterIP == "None"
 }
 
-// IsValidServiceType returns true iff ServiceType is supported for external load balancing
+// IsValidServiceType returns true iff service properties are suche that
+// external load balancing is appropriate
 func IsValidServiceType(obj interface{}) bool {
-	if ServiceTypeNodePort(obj) || ServiceTypeLoadBalancer(obj) {
+	if !ServiceTypeHeadless(obj) && (ServiceTypeNodePort(obj) || ServiceTypeLoadBalancer(obj)) {
 		return true
 	}
 	return false
