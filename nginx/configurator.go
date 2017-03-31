@@ -51,12 +51,12 @@ var (
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
 type Configurator struct {
 	ngxc   *NginxController
-	config *HTTPConfig
+	config *HTTPContext
 	lock   sync.Mutex
 }
 
 // NewConfigurator creates a new Configurator
-func NewConfigurator(ngxc *NginxController, config *HTTPConfig) *Configurator {
+func NewConfigurator(ngxc *NginxController, config *HTTPContext) *Configurator {
 	cfgtor := Configurator{
 		ngxc:   ngxc,
 		config: config,
@@ -279,7 +279,7 @@ func (cfgtor *Configurator) generateServiceNginxConfig(svc *ServiceSpec) (svcCon
 	return
 }
 
-func (cfgtor *Configurator) createIngressConfig(ingEx *IngressEx) HTTPConfig {
+func (cfgtor *Configurator) createIngressConfig(ingEx *IngressEx) HTTPContext {
 	ingCfg := *cfgtor.config
 	if serverTokens, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/server-tokens", ingEx.Ingress); exists {
 		if err != nil {
@@ -452,7 +452,7 @@ func getSSLServices(ingEx *IngressEx) map[string]bool {
 	return sslServices
 }
 
-func createLocation(path string, upstream Upstream, cfg *HTTPConfig, websocket bool, rewrite string, ssl bool) Location {
+func createLocation(path string, upstream Upstream, cfg *HTTPContext, websocket bool, rewrite string, ssl bool) Location {
 	loc := Location{
 		Path:                 path,
 		Upstream:             upstream,
@@ -576,7 +576,7 @@ func (cfgtor *Configurator) UpdateServiceEndpoints(name string, svc *ServiceSpec
 }
 
 // UpdateMainConfigHTTPContext updates NGINX Configuration parameters
-func (cfgtor *Configurator) UpdateMainConfigHTTPContext(config *HTTPConfig) error {
+func (cfgtor *Configurator) UpdateMainConfigHTTPContext(config *HTTPContext) error {
 	if cfgtor.ngxc.cfgType != IngressCfg {
 		return errors.New("UpdateMainConfig: I'm sorry Dave, I'm afraid I can't do that.")
 	}

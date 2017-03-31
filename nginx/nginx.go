@@ -248,7 +248,7 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 			createDir(ngxc.nginxCertsPath)
 			cfg.DefaultStreamContext = false
 			cfg.DefaultHTTPContext = true
-			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultConfig().MainServerNamesHashMaxSize
+			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultHTTPContext().MainServerNamesHashMaxSize
 			cfg.HTTPContext.HealthStatus = healthStatus
 		}
 		ngxc.mainCfg = cfg

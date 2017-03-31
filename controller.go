@@ -82,7 +82,7 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 	ngxc, _ := nginx.NewNginxController(nginx.ServiceCfg, "/etc/nginx/", local, false)
 	ngxc.Start()
 
-	config := nginx.NewDefaultConfig()
+	config := nginx.NewDefaultHTTPContext()
 	configtor := nginx.NewConfigurator(ngxc, config)
 
 	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")
