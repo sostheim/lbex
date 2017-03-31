@@ -6,90 +6,27 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"text/template"
 
 	"github.com/golang/glog"
 )
 
-const dhparamFilename = "dhparam.pem"
-
+// Configuration Type for NGINX Server
 type Configuration uint8
 
 const (
-	IngressCfg = Configuration(iota)
-	ServiceCfg
+	LocalCfg = Configuration(iota)
+	StreamCfg
+	HTTPCfg
+	StreamHTTPCfg
 )
 
 // NginxController Updates NGINX configuration, starts and reloads NGINX
 type NginxController struct {
 	nginxConfdPath string
 	nginxCertsPath string
-	local          bool
 	cfgType        Configuration
 	mainCfg        *NginxMainConfig
-}
-
-// IngressNginxConfig describes an NGINX configuration Ingress Resource handling
-type IngressNginxConfig struct {
-	Upstreams []Upstream
-	Servers   []Server
-}
-
-// Upstream describes an NGINX upstream (context http)
-// http://nginx.org/en/docs/http/ngx_http_upstream_module.html#upstream
-type Upstream struct {
-	Name            string
-	UpstreamServers []UpstreamServer
-}
-
-// UpstreamServer describes a server in an NGINX upstream (context http::upstream)
-// http://nginx.org/en/docs/http/ngx_http_upstream_module.html#server
-type UpstreamServer struct {
-	Address string
-	Port    string
-}
-
-// Server describes an NGINX server
-// http://nginx.org/en/docs/http/ngx_http_core_module.html
-type Server struct {
-	ServerSnippets        []string
-	Name                  string
-	ServerTokens          bool
-	Locations             []Location
-	SSL                   bool
-	SSLCertificate        string
-	SSLCertificateKey     string
-	HTTP2                 bool
-	RedirectToHTTPS       bool
-	ProxyProtocol         bool
-	HSTS                  bool
-	HSTSMaxAge            int64
-	HSTSIncludeSubdomains bool
-	ProxyHideHeaders      []string
-	ProxyPassHeaders      []string
-
-	// http://nginx.org/en/docs/http/ngx_http_realip_module.html
-	RealIPHeader    string
-	SetRealIPFrom   []string
-	RealIPRecursive bool
-}
-
-// Location describes an NGINX location
-type Location struct {
-	LocationSnippets     []string
-	Path                 string
-	Upstream             Upstream
-	ProxyConnectTimeout  string
-	ProxyReadTimeout     string
-	ClientMaxBodySize    string
-	Websocket            bool
-	Rewrite              string
-	SSL                  bool
-	ProxyBuffering       bool
-	ProxyBuffers         string
-	ProxyBufferSize      string
-	ProxyMaxTempFileSize string
 }
 
 // NginxMainConfig describe the main NGINX configuration file
@@ -141,92 +78,16 @@ type NginxMainHTTPConfig struct {
 	SSLDHParam             string
 }
 
-// ServiceNginxConfig describes an NGINX configuration for Service LoadBalancing
-type ServiceNginxConfig struct {
-	Resolver  string
-	Upstreams []StreamUpstream
-	Servers   []StreamServer
-}
-
-// StreamUpstream describes an NGINX upstream (context stream)
-// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#upstream
-// The 'hash' directive is not supported in the 'upstream' context currently.
-type StreamUpstream struct {
-	Name            string
-	Algorithm       string
-	LeastTimeMethod string
-	UpstreamServers []StreamUpstreamServer
-}
-
-// StreamUpstreamServer describes a server in an NGINX upstream (context stream::upstream)
-// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#server
-// The following 'server' directive parameters are ommitted, as they are only available in NGINX Plus
-// - Resolve   bool
-// - Service   string
-// - SlowStart string
-type StreamUpstreamServer struct {
-	Address     string // "The address can be specified as a domain name or IP address with an obligatory port"
-	Weight      string
-	MaxConns    string
-	MaxFails    string
-	FailTimeout string
-	Backup      bool
-	Down        bool
-}
-
-// StreamServer describes an NGINX Server (context stream)
-// http://nginx.org/en/docs/stream/ngx_stream_core_module.html#server
-type StreamServer struct {
-	Listen               StreamListen
-	ProxyProtocol        bool
-	ProxyProtocolTimeout string
-	ProxyPassAddress     string
-}
-
-// StreamListen describes an NGINX server listener (context stream::server)
-// http://nginx.org/en/docs/stream/ngx_stream_core_module.html#listen
-type StreamListen struct {
-	Address string
-	Port    string
-	UDP     bool
-	// other fields ommitted, e.g SSL, backlog, ... so_keepalive
-}
-
-// NewUpstreamWithDefaultServer creates an upstream with the default server.
-// proxy_pass to an upstream with the default server returns 502.
-// We use it for services that have no endpoints
-func NewUpstreamWithDefaultServer(name string) Upstream {
-	return Upstream{
-		Name:            name,
-		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
-	}
-}
-
-// NewStreamUpstreamWithDefaultServer creates an upstream with the default server.
-// Do not initialize Algorithm or LeastTimeMethod!
-func NewStreamUpstreamWithDefaultServer(name string) StreamUpstream {
-	return StreamUpstream{
-		Name:            name,
-		UpstreamServers: []StreamUpstreamServer{StreamUpstreamServer{Address: "127.0.0.1:1234"}},
-	}
-}
-
-// IsStreamUpstreamDefault - true if still default value, false otherwise.
-func IsStreamUpstreamDefault(su StreamUpstream) bool {
-	return reflect.DeepEqual(su, NewStreamUpstreamWithDefaultServer(su.Name))
-}
-
 // NewNginxController creates a NGINX controller
-func NewNginxController(cfgType Configuration, nginxConfPath string, local bool, healthStatus bool) (*NginxController, error) {
+func NewNginxController(cfgType Configuration, nginxConfPath string, healthStatus bool) (*NginxController, error) {
 	ngxc := NginxController{
 		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
 		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
-		local:          local,
 		cfgType:        cfgType,
 		mainCfg:        nil,
 	}
 
-	if !local {
+	if cfgType != LocalCfg {
 		cfg := &NginxMainConfig{
 			Daemon:          true,
 			ErrorLogFile:    "/var/log/nginx/error.log",
@@ -241,10 +102,10 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 			}, */
 		}
 		switch cfgType {
-		case ServiceCfg:
+		case StreamCfg:
 			cfg.DefaultStreamContext = true
 			cfg.DefaultHTTPContext = false
-		case IngressCfg:
+		case HTTPCfg:
 			createDir(ngxc.nginxCertsPath)
 			cfg.DefaultStreamContext = false
 			cfg.DefaultHTTPContext = true
@@ -257,160 +118,9 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, local bool,
 	return &ngxc, nil
 }
 
-// DeleteServiceConfiguration deletes the configuration file, which corresponds for the
-// specified ingress resource / service load balancer from NGINX conf directory
-func (nginx *NginxController) DeleteServiceConfiguration(name string) {
-	filename := nginx.getNginxServiceConfigFileName(name)
-	glog.V(3).Infof("deleting %v", filename)
-
-	if !nginx.local {
-		if err := os.Remove(filename); err != nil {
-			glog.Warningf("Failed to delete %v: %v", filename, err)
-		}
-	}
-}
-
-// DeleteIngressConfiguration deletes the configuration file, which corresponds for the
-// specified ingress resource / service load balancer from NGINX conf directory
-func (nginx *NginxController) DeleteIngressConfiguration(name string) {
-	filename := nginx.getNginxIngressConfigFileName(name)
-	glog.V(3).Infof("deleting %v", filename)
-
-	if !nginx.local {
-		if err := os.Remove(filename); err != nil {
-			glog.Warningf("Failed to delete %v: %v", filename, err)
-		}
-	}
-}
-
-// AddOrUpdateIngress creates or updates a file with
-// the specified configuration for the specified ingress
-func (nginx *NginxController) AddOrUpdateIngress(name string, config IngressNginxConfig) {
-	glog.V(3).Infof("Updating NGINX configuration for Ingress Resource")
-	filename := nginx.getNginxIngressConfigFileName(name)
-	nginx.templateIngress(config, filename)
-}
-
-// AddOrUpdateService creates or updates a file with the specified service config
-func (nginx *NginxController) AddOrUpdateService(name string, config ServiceNginxConfig) {
-	glog.V(3).Infof("Updating NGINX configuration for Service LoadBalancer")
-	filename := nginx.getNginxServiceConfigFileName(name)
-	nginx.templateService(config, filename)
-}
-
-// AddOrUpdateDHParam creates the servers dhparam.pem file
-func (nginx *NginxController) AddOrUpdateDHParam(dhparam string) (string, error) {
-	fileName := nginx.nginxCertsPath + "/" + dhparamFilename
-	if !nginx.local {
-		pem, err := os.Create(fileName)
-		if err != nil {
-			return fileName, fmt.Errorf("Couldn't create file %v: %v", fileName, err)
-		}
-		defer pem.Close()
-
-		_, err = pem.WriteString(dhparam)
-		if err != nil {
-			return fileName, fmt.Errorf("Couldn't write to pem file %v: %v", fileName, err)
-		}
-	}
-	return fileName, nil
-}
-
-// AddOrUpdateCertAndKey creates a .pem file wth the cert and the key with the
-// specified name
-func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, key string) string {
-	pemFileName := nginx.nginxCertsPath + "/" + name + ".pem"
-
-	if !nginx.local {
-		pem, err := os.Create(pemFileName)
-		if err != nil {
-			glog.Fatalf("Couldn't create pem file %v: %v", pemFileName, err)
-		}
-		defer pem.Close()
-
-		_, err = pem.WriteString(key)
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-
-		_, err = pem.WriteString("\n")
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-
-		_, err = pem.WriteString(cert)
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-	}
-
-	return pemFileName
-}
-
-func (nginx *NginxController) getNginxServiceConfigFileName(name string) string {
-	return path.Join(nginx.nginxConfdPath, name+".stream.conf")
-}
-
-func (nginx *NginxController) getNginxIngressConfigFileName(name string) string {
-	return path.Join(nginx.nginxConfdPath, name+".http.conf")
-}
-
-func (nginx *NginxController) templateIngress(config IngressNginxConfig, filename string) {
-	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
-	if err != nil {
-		glog.Infof("templateIngress: template error: %v", err)
-		glog.Fatal("templateIngress: failed to parse ingress template file")
-	}
-
-	if glog.V(3) {
-		glog.Infof("writing NGINX Ingress Resource configuration to %v", filename)
-		tmpl.Execute(os.Stdout, config)
-	}
-
-	if !nginx.local {
-		w, err := os.Create(filename)
-		if err != nil {
-			glog.Fatalf("failed to open %v: %v", filename, err)
-		}
-		defer w.Close()
-
-		if err := tmpl.Execute(w, config); err != nil {
-			glog.Fatalf("failed to write template %v", err)
-		}
-	}
-
-	glog.V(3).Infof("NGINX Ingress Resource configuration file had been updated")
-}
-
-func (nginx *NginxController) templateService(config ServiceNginxConfig, filename string) {
-	tmpl, err := template.New("service.tmpl").ParseFiles("service.tmpl")
-	if err != nil {
-		glog.Infof("templateService: template error: %v", err)
-		glog.Fatal("templateService: failed to parse service template file")
-	}
-
-	if glog.V(3) {
-		glog.Infof("templateService: writing NGINX Service LoadBalancer configuration to: %v", filename)
-		tmpl.Execute(os.Stdout, config)
-	}
-
-	if !nginx.local {
-		w, err := os.Create(filename)
-		if err != nil {
-			glog.Fatalf("templateService: failed to open %v: %v", filename, err)
-		}
-		defer w.Close()
-
-		if err := tmpl.Execute(w, config); err != nil {
-			glog.Fatalf("templateService: failed to write template %v", err)
-		}
-	}
-	glog.V(3).Infof("templateService: NGINX Service LoadBalancer configuration file had been updated")
-}
-
 // Reload reloads NGINX
-func (nginx *NginxController) Reload() error {
-	if !nginx.local {
+func (ngxc *NginxController) Reload() error {
+	if ngxc.cfgType != LocalCfg {
 		if err := shellOut("nginx -t"); err != nil {
 			return fmt.Errorf("Reload: Invalid nginx configuration detected, not reloading: %s", err)
 		}
@@ -424,8 +134,8 @@ func (nginx *NginxController) Reload() error {
 }
 
 // Start starts NGINX
-func (nginx *NginxController) Start() {
-	if !nginx.local {
+func (ngxc *NginxController) Start() {
+	if ngxc.cfgType != LocalCfg {
 		if err := shellOut("nginx"); err != nil {
 			glog.Fatalf("Failed to start nginx: %v", err)
 		}
@@ -477,7 +187,7 @@ func (ngxc *NginxController) UpdateMainConfigFile() {
 		tmpl.Execute(os.Stdout, ngxc.mainCfg)
 	}
 
-	if !ngxc.local {
+	if ngxc.cfgType != LocalCfg {
 		w, err := os.Create(filename)
 		if err != nil {
 			glog.Fatalf("Failed to open %v: %v", filename, err)

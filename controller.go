@@ -74,18 +74,16 @@ type lbExController struct {
 
 func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, service *string) *lbExController {
 	// local testing -> no actual NGINX instance
-	local := ("darwin" == runtime.GOOS)
-
-	glog.V(3).Infof("newLbExController: is local: %t", local)
+	cfgType := nginx.StreamCfg
+	if runtime.GOOS == "darwin" {
+		cfgType = nginx.LocalCfg
+	}
 
 	// Create and start the NGINX LoadBalancer
-	ngxc, _ := nginx.NewNginxController(nginx.ServiceCfg, "/etc/nginx/", local, false)
+	ngxc, _ := nginx.NewNginxController(cfgType, "/etc/nginx/", false)
 	ngxc.Start()
 
-	config := nginx.NewDefaultHTTPContext()
-	configtor := nginx.NewConfigurator(ngxc, config)
-
-	glog.V(3).Infof("newLbExController: NGINX server started w/ default configuration")
+	configtor := nginx.NewConfigurator(ngxc)
 
 	// create external loadbalancer controller struct
 	lbexc := lbExController{
@@ -133,7 +131,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 	}
 	if !exists {
 		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
-		lbex.cfgtor.DeleteConfiguration(filename, nginx.ServiceCfg)
+		lbex.cfgtor.DeleteConfiguration(filename, nginx.StreamCfg)
 	} else {
 		err = ValidateServiceObjectType(storeObj)
 		if err != nil {
@@ -148,12 +146,11 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 			return nil
 		}
 		glog.V(3).Infof("syncServices: lbex managed service: %v", obj)
-		glog.V(4).Infof("syncServices: add/update lbex managed services:\nTCP Services:%v\nUDP Services: %v", tcpSvc, udpSvc)
 		svcSpec := &nginx.ServiceSpec{
 			Key:     key,
 			Service: storeObj.(*v1.Service),
 		}
-		glog.V(2).Infof("syncServices: add/update service: %s,\n%v", key, svcSpec)
+		glog.V(3).Infof("syncServices: add/update service: %s,\n%v", key, svcSpec)
 		lbex.cfgtor.AddOrUpdateService(filename, svcSpec)
 	}
 	return nil
