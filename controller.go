@@ -64,6 +64,10 @@ type lbExController struct {
 	servicesStore cache.Store
 	servicesQueue *TaskQueue
 
+	nodesLWC   *lwController
+	nodesStore cache.Store
+	nodesQueue *TaskQueue
+
 	// The service to provide load balancing for, or "all" if empty
 	service string
 
@@ -93,6 +97,8 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 		service:   *service,
 		cfgtor:    configtor,
 	}
+	lbexc.nodesQueue = NewTaskQueue(lbexc.syncNodes)
+	lbexc.nodesLWC = newNodesListWatchControllerForClientset(&lbexc)
 	lbexc.servicesQueue = NewTaskQueue(lbexc.syncServices)
 	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
 	lbexc.endpointsQueue = NewTaskQueue(lbexc.syncEndpoints)
@@ -103,14 +109,51 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 
 func (lbex *lbExController) run() {
 	// run the controller and queue goroutines
+	go lbex.nodesLWC.controller.Run(lbex.stopCh)
+	go lbex.nodesQueue.Run(time.Second, lbex.stopCh)
+
 	go lbex.endpointsLWC.controller.Run(lbex.stopCh)
 	go lbex.endpointsQueue.Run(time.Second, lbex.stopCh)
 
-	// Allow time for the initial cache update for all endpoints to take place 1st
+	// Allow time for the initial cache update for all nodes and endpoints to take place 1st
 	time.Sleep(5 * time.Second)
 	go lbex.servciesLWC.controller.Run(lbex.stopCh)
 	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
 
+}
+
+func (lbex *lbExController) syncNodes(obj interface{}) error {
+	if lbex.nodesQueue.IsShuttingDown() {
+		return nil
+	}
+
+	key, ok := obj.(string)
+	if !ok {
+		return errors.New("type assertion faild for key string")
+	}
+
+	storeObj, exists, err := lbex.nodesStore.GetByKey(key)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		glog.V(2).Infof("deleting node: %v\n", key)
+		lbex.cfgtor.DeleteNode(key)
+	} else {
+		err = ValidateNodeObjectType(storeObj)
+		if err != nil {
+			glog.V(3).Infof("failed ValidateNodeObjectType(): err: %v", err)
+			return err
+		}
+		internalIP, err := GetNodeInternalIP(obj)
+		if err != nil {
+			return err
+		}
+		active := IsNodeScheduleable(obj)
+		glog.V(3).Infof("add/update node: %s, ip: %s, active: %t", key, internalIP, active)
+		lbex.cfgtor.AddOrUpdateNode(key, internalIP, active)
+	}
+	return nil
 }
 
 func (lbex *lbExController) syncServices(obj interface{}) error {

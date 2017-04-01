@@ -17,26 +17,8 @@ import (
 const emptyHost = ""
 
 var (
-	nodeIPAddresses = []string{
-		"10.142.0.14",
-		"10.142.0.8",
-		"10.142.0.19",
-		"10.142.0.9",
-		"10.142.0.12",
-		"10.142.0.18",
-		"10.142.0.6",
-		"10.142.0.7",
-		"10.142.0.16",
-		"10.142.0.2",
-		"10.142.0.3",
-		"10.142.0.13",
-		"10.142.0.11",
-		"10.142.0.5",
-		"10.142.0.4",
-		"10.142.0.17",
-		"10.142.0.10",
-		"10.142.0.15",
-	}
+	keyToIPAddress  = make(map[string]string)
+	nodeIPAddresses = []string{}
 
 	supportedMethods = []string{
 		"connect",
@@ -61,6 +43,35 @@ func NewConfigurator(ngxc *NginxController) *Configurator {
 		ngxc:   ngxc,
 		config: NewDefaultHTTPContext(),
 	}
+}
+
+// AddOrUpdateNode - adds the node address to the nodeIPAddresses slice
+func (cfgtor *Configurator) AddOrUpdateNode(key string, ip string, active bool) error {
+	var found bool
+	var pos int
+	for p, v := range nodeIPAddresses {
+		if v == ip {
+			found = true
+			pos = p
+		}
+	}
+	if !found {
+		nodeIPAddresses = append(nodeIPAddresses, ip)
+		keyToIPAddress[key] = ip
+	} else if !active {
+		nodeIPAddresses = append(nodeIPAddresses[:pos], nodeIPAddresses[pos+1:]...)
+		delete(keyToIPAddress, key)
+	}
+	return nil
+}
+
+// DeleteNode - removes the node (if it exists) from the nodeIPAddresses slice
+func (cfgtor *Configurator) DeleteNode(key string) error {
+	ip, ok := keyToIPAddress[key]
+	if ok {
+		cfgtor.AddOrUpdateNode(key, ip, false)
+	}
+	return nil
 }
 
 // AddOrUpdateDHParam adds the content string to parameters

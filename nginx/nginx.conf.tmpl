@@ -53,7 +53,7 @@ events {
 stream {
     include /etc/nginx/conf.d/*.stream.conf;
 }
-{{end}}
+{{end -}}
 
 {{- if .DefaultHTTPContext}}
 
@@ -111,7 +111,7 @@ http {
     include /etc/nginx/conf.d/*.http.conf;
     {{end}}
 }
-{{end}}
+{{end -}}
 
 
 
