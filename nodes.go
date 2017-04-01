@@ -81,13 +81,14 @@ func newNodesListWatchControllerForClientset(lbex *lbExController) *lwController
 	return lwc
 }
 
+// filterNode returns true if the node should be filtered, false otherwise
 func filterNode(obj interface{}) bool {
 	// obj can be filtered for either a: type conversion failure
 	// *Removed Criteria* b: node is marked as scheduleable for pod placement.
 	// checking scheduleable makes it impossible to remove a node that
 	// has been newly marked as unschduleable.
 	_, ok := obj.(*v1.Node)
-	return ok
+	return !ok
 }
 
 func nodeCreatedFunc(lbex *lbExController) func(obj interface{}) {

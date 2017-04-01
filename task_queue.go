@@ -58,12 +58,11 @@ func (t *TaskQueue) Enqueue(obj interface{}) {
 
 	key, err := keyFunc(obj)
 	if err != nil {
-		glog.V(3).Infof("couldn't get key for object %+v: %v", obj, err)
+		glog.Errorf("couldn't get key for object %+v: %v", obj, err)
 		return
 	}
 
-	glog.V(3).Infof("queuing: %s", key)
-	glog.V(4).Infof("key referenced obj: %v", obj)
+	glog.V(5).Infof("queuing: %s, for object: %v", key, obj)
 	t.queue.Add(key)
 }
 
@@ -87,7 +86,7 @@ func (t *TaskQueue) worker() {
 			glog.Warningf("invalid key: %v", key)
 		}
 
-		glog.V(3).Infof("syncing: %s", keyValue)
+		glog.V(4).Infof("syncing: %s", keyValue)
 		if err := t.sync(keyValue); err != nil {
 			t.Requeue(keyValue, err)
 		}

@@ -143,13 +143,14 @@ func (lbex *lbExController) syncNodes(obj interface{}) error {
 		err = ValidateNodeObjectType(storeObj)
 		if err != nil {
 			glog.V(3).Infof("failed ValidateNodeObjectType(): err: %v", err)
-			return err
+			return nil
 		}
-		internalIP, err := GetNodeInternalIP(obj)
+		internalIP, err := GetNodeInternalIP(storeObj)
 		if err != nil {
-			return err
+			glog.V(3).Infof("failed GetNodeInternalIP(): err: %v", err)
+			return nil
 		}
-		active := IsNodeScheduleable(obj)
+		active := IsNodeScheduleable(storeObj)
 		glog.V(3).Infof("add/update node: %s, ip: %s, active: %t", key, internalIP, active)
 		lbex.cfgtor.AddOrUpdateNode(key, internalIP, active)
 	}
@@ -179,16 +180,14 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 		err = ValidateServiceObjectType(storeObj)
 		if err != nil {
 			glog.V(3).Infof("syncServices: ValidateServiceObjectType(): err: %v", err)
-			return err
+			return nil
 		}
 
-		glog.V(3).Infof("syncServices: checking service: %s", key)
 		tcpSvc, udpSvc := lbex.getService(key)
 		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
 			glog.V(4).Infof("syncServices: %s: not an lbex manage service", key)
 			return nil
 		}
-		glog.V(3).Infof("syncServices: lbex managed service: %v", obj)
 		svcSpec := &nginx.ServiceSpec{
 			Key:     key,
 			Service: storeObj.(*v1.Service),
@@ -209,7 +208,7 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 		return errors.New("syncEndpoints: key string type assertion failed")
 	}
 
-	storeObj, exists, err := lbex.endpointStore.GetByKey(key)
+	_, exists, err := lbex.endpointStore.GetByKey(key)
 	if err != nil {
 		return err
 	}
@@ -218,13 +217,11 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 		// TODO, need a service object here...
 		// lbex.cfgtor.UpdateServiceEndpoints(key, <future thing>)
 	} else {
-		glog.V(3).Infof("syncEndpoints: checking endpoints for key %s", key)
 		tcpSvc, udpSvc := lbex.getService(key)
 		if len(udpSvc) == 0 && len(tcpSvc) == 0 {
-			glog.V(3).Info("syncEndpoints: not a lbex managed service endpoint")
+			glog.V(4).Info("syncEndpoints: not a lbex managed service endpoint")
 		} else {
-			glog.V(4).Infof("syncEndpoints: lbex managed service endpoint object:\n%v", storeObj)
-			glog.V(4).Infof("syncEndpoints: add/update lbex managed service endpoint for:\nTCP Services: %v\nUDP Services: %v", tcpSvc, udpSvc)
+			glog.V(3).Infof("syncEndpoints: add/update lbex managed service: %s, with endpoints:\nTCP Services: %v\nUDP Services: %v", key, tcpSvc, udpSvc)
 		}
 	}
 	return nil
@@ -320,7 +317,8 @@ func (lbex *lbExController) getService(key string) (tcpServices []Service, udpSe
 	}
 
 	if !ValidateServiceObject(obj) {
-		glog.V(3).Infof("getService: can't validtes service object name: %s", key)
+		// Normal case for non-LB services (e.g. other service type or no annotation)
+		glog.V(4).Infof("getService: can't validate service object key: %s", key)
 		return nil, nil
 	}
 
