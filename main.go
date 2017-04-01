@@ -23,7 +23,6 @@ import (
 	"github.com/golang/glog"
 	flag "github.com/spf13/pflag"
 
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/unversioned"
 	"k8s.io/client-go/pkg/util/wait"
@@ -100,16 +99,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	// create a (mostly unused but nice to have) dynamic client
-	glog.V(3).Infof("main(): create client from config")
-	client, err := dynamic.NewClient(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	lbex := newLbExController(client, clientset, serviceName)
+	lbex := newLbExController(clientset, serviceName)
 	lbex.run()
 
 	for {

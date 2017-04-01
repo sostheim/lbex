@@ -21,14 +21,10 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/unversioned"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/fields"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -40,26 +36,6 @@ func newEndpointsListWatchController() *lwController {
 	return &lwController{
 		stopCh: make(chan struct{}),
 	}
-}
-
-func newEndpointsListWatchControllerForClient(lbex *lbExController) *lwController {
-
-	lwc := newEndpointsListWatchController()
-
-	//Setup an informer to call functions when the ListWatch changes
-	listWatch := &cache.ListWatch{
-		ListFunc:  clientEndpointsListFunc(lbex.client, api.NamespaceAll),
-		WatchFunc: clientEndpointsWatchFunc(lbex.client, api.NamespaceAll),
-	}
-	eventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    endpointCreatedFunc(lbex),
-		DeleteFunc: endpointDeletedFunc(lbex),
-		UpdateFunc: endpointUpdatedFunc(lbex),
-	}
-
-	lbex.endpointStore, lwc.controller = cache.NewInformer(listWatch, &api.Endpoints{}, resyncPeriod, eventHandler)
-
-	return lwc
 }
 
 func newEndpointsListWatchControllerForClientset(lbex *lbExController) *lwController {
@@ -113,29 +89,5 @@ func endpointUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 			glog.V(5).Infof("UpdateFunc: enqueuing unequal endpoint object")
 			lbex.endpointsQueue.Enqueue(newObj)
 		}
-	}
-}
-
-func clientEndpointsListFunc(client *dynamic.Client, namespace string) func(api.ListOptions) (runtime.Object, error) {
-	return func(options api.ListOptions) (runtime.Object, error) {
-		return client.Resource(&epAPIResource, api.NamespaceAll).List(&options)
-	}
-}
-
-func clientEndpointsWatchFunc(client *dynamic.Client, namespace string) func(options api.ListOptions) (watch.Interface, error) {
-	return func(options api.ListOptions) (watch.Interface, error) {
-		return client.Resource(&epAPIResource, api.NamespaceAll).Watch(&options)
-	}
-}
-
-func clientsetEndpointsListFunc(client *kubernetes.Clientset, namespace string) func(v1.ListOptions) (runtime.Object, error) {
-	return func(options v1.ListOptions) (runtime.Object, error) {
-		return client.CoreV1().Endpoints(namespace).List(options)
-	}
-}
-
-func clientsetEndpointsWatchFunc(client *kubernetes.Clientset, namespace string) func(options v1.ListOptions) (watch.Interface, error) {
-	return func(options v1.ListOptions) (watch.Interface, error) {
-		return client.CoreV1().Endpoints(namespace).Watch(options)
 	}
 }

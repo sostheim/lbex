@@ -28,7 +28,6 @@ import (
 	"github.com/sostheim/lbex/annotations"
 	"github.com/sostheim/lbex/nginx"
 
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/util/intstr"
@@ -53,7 +52,6 @@ type lwController struct {
 
 // External LB Controller (lbex)
 type lbExController struct {
-	client    *dynamic.Client
 	clientset *kubernetes.Clientset
 
 	endpointsLWC   *lwController
@@ -76,7 +74,7 @@ type lbExController struct {
 	cfgtor *nginx.Configurator
 }
 
-func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, service *string) *lbExController {
+func newLbExController(clientset *kubernetes.Clientset, service *string) *lbExController {
 	// local testing -> no actual NGINX instance
 	cfgType := nginx.StreamCfg
 	if runtime.GOOS == "darwin" {
@@ -91,7 +89,6 @@ func newLbExController(client *dynamic.Client, clientset *kubernetes.Clientset, 
 
 	// create external loadbalancer controller struct
 	lbexc := lbExController{
-		client:    client,
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
 		service:   *service,
