@@ -17,9 +17,6 @@ import (
 const emptyHost = ""
 
 var (
-	keyToIPAddress  = make(map[string]string)
-	nodeIPAddresses = []string{}
-
 	SupportedAlgorithms = []string{
 		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
 		"leastconn",  // selects the server with the smaller number of current active connections.
@@ -38,6 +35,13 @@ var (
 	DefaultMethod = SupportedMethods[0]
 )
 
+var (
+	// map node names (key) to Node type
+	nodes = make(map[string]Node)
+	// map service key to nodes that populate the services upstream
+	serviceNodes = make(map[string][]Node)
+)
+
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
 type Configurator struct {
 	ngxc   *NginxController
@@ -53,31 +57,47 @@ func NewConfigurator(ngxc *NginxController) *Configurator {
 	}
 }
 
-// AddOrUpdateNode - adds the node address to the nodeIPAddresses slice
-func (cfgtor *Configurator) AddOrUpdateNode(key string, ip string, active bool) error {
-	var found bool
-	var pos int
-	for p, v := range nodeIPAddresses {
-		if v == ip {
-			found = true
-			pos = p
+func serviceListByNodeAddress(address string) (list []string) {
+	// TODO: replace this nested loop search with a reverse map nodeIPs -> service keys
+	for svc, nodeList := range serviceNodes {
+		for _, node := range nodeList {
+			if node.InternalIP == address || node.ExternalIP == address {
+				list = append(list, svc)
+				break
+			}
 		}
 	}
-	if !found {
-		nodeIPAddresses = append(nodeIPAddresses, ip)
-		keyToIPAddress[key] = ip
-	} else if !active {
-		nodeIPAddresses = append(nodeIPAddresses[:pos], nodeIPAddresses[pos+1:]...)
-		delete(keyToIPAddress, key)
+	return
+}
+
+// AddOrUpdateNode - add, update (including removing) the node from teh set of upstream candidates
+func (cfgtor *Configurator) AddOrUpdateNode(node Node) []string {
+	services := []string{}
+	elem, ok := nodes[node.Name]
+	if !ok {
+		nodes[node.Name] = node
+	} else {
+		if node.Active {
+			if elem.InternalIP != node.InternalIP {
+				services = serviceListByNodeAddress(elem.InternalIP)
+			}
+			if elem.ExternalIP != node.ExternalIP {
+				services = append(services, serviceListByNodeAddress(elem.ExternalIP)...)
+			}
+			nodes[node.Name] = node
+		} else {
+			delete(nodes, node.Name)
+		}
 	}
-	return nil
+	return services
 }
 
 // DeleteNode - removes the node (if it exists) from the nodeIPAddresses slice
-func (cfgtor *Configurator) DeleteNode(key string) error {
-	ip, ok := keyToIPAddress[key]
+func (cfgtor *Configurator) DeleteNode(key string) []string {
+	node, ok := nodes[key]
 	if ok {
-		cfgtor.AddOrUpdateNode(key, ip, false)
+		node.Active = false
+		return cfgtor.AddOrUpdateNode(node)
 	}
 	return nil
 }
@@ -529,8 +549,8 @@ func (cfgtor *Configurator) createStreamUpstream(svc *v1.Service, svcPort *v1.Se
 		Algorithm:       algo,
 		LeastTimeMethod: method,
 	}
-	for _, address := range nodeIPAddresses {
-		sus := StreamUpstreamServer{Address: address + ":" + strconv.Itoa(int(svcPort.NodePort))}
+	for _, node := range nodes {
+		sus := StreamUpstreamServer{Address: node.InternalIP + ":" + strconv.Itoa(int(svcPort.NodePort))}
 		su.UpstreamServers = append(su.UpstreamServers, sus)
 	}
 	return su
@@ -548,6 +568,9 @@ func getNameForUpstream(ing *extensions.Ingress, host string, service string) st
 }
 
 func getNameForStreamUpstream(svc *v1.Service, portName string) string {
+	if portName == "" {
+		portName = "unnamed"
+	}
 	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, portName)
 }
 

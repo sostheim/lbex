@@ -127,23 +127,35 @@ func (lbex *lbExController) syncNodes(obj interface{}) error {
 	if err != nil {
 		return err
 	}
+	affectedServices := []string{}
 	if !exists {
 		glog.V(2).Infof("deleting node: %v\n", key)
-		lbex.cfgtor.DeleteNode(key)
+		affectedServices = lbex.cfgtor.DeleteNode(key)
 	} else {
 		err = ValidateNodeObjectType(storeObj)
 		if err != nil {
 			glog.V(3).Infof("failed ValidateNodeObjectType(): err: %v", err)
 			return nil
 		}
-		internalIP, err := GetNodeInternalIP(storeObj)
+		addrs, err := GetNodeAddress(storeObj)
 		if err != nil {
-			glog.V(3).Infof("failed GetNodeInternalIP(): err: %v", err)
+			glog.V(3).Infof("failed GetNodeAddress(): err: %v", err)
 			return nil
 		}
 		active := IsNodeScheduleable(storeObj)
-		glog.V(3).Infof("add/update node: %s, ip: %s, active: %t", key, internalIP, active)
-		lbex.cfgtor.AddOrUpdateNode(key, internalIP, active)
+		node := nginx.Node{
+			Name:       key,
+			Hostname:   addrs.Hostname,
+			ExternalIP: addrs.ExternalIP,
+			InternalIP: addrs.InternalIP,
+			Active:     active,
+		}
+		glog.V(3).Infof("add/update node: %s", key)
+		affectedServices = lbex.cfgtor.AddOrUpdateNode(node)
+	}
+	glog.V(4).Infof("queuing updates for affected services: %v", affectedServices)
+	for _, svc := range affectedServices {
+		lbex.servicesQueue.Enqueue(svc)
 	}
 	return nil
 }
