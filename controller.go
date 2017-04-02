@@ -35,13 +35,7 @@ import (
 )
 
 var (
-	resyncPeriod        = 30 * time.Second
-	supportedAlgorithms = []string{
-		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
-		"leastconn",  // selects the server with the smaller number of current active connections.
-		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
-	}
-	defaultAlgorithm = string("roundrobin")
+	resyncPeriod = 30 * time.Second
 )
 
 // List Watch (lw) Controller (lwc)
@@ -347,14 +341,14 @@ func (lbex *lbExController) getService(key string) (tcpServices []Service, udpSe
 		}
 
 		if val, ok := annotations.GetAlgorithm(service); ok {
-			for _, current := range supportedAlgorithms {
+			for _, current := range nginx.SupportedAlgorithms {
 				if val == current {
 					newSvc.Algorithm = val
 					break
 				}
 			}
 		} else {
-			newSvc.Algorithm = defaultAlgorithm
+			newSvc.Algorithm = nginx.DefaultAlgorithm
 		}
 		newSvc.FrontendPort = int(servicePort.Port)
 

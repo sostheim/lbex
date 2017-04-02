@@ -20,14 +20,22 @@ var (
 	keyToIPAddress  = make(map[string]string)
 	nodeIPAddresses = []string{}
 
-	supportedMethods = []string{
-		"connect",
+	SupportedAlgorithms = []string{
+		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
+		"leastconn",  // selects the server with the smaller number of current active connections.
+		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
+	}
+	DefaultAlgorithm = SupportedAlgorithms[0]
+
+	SupportedMethods = []string{
+		"connect", // *set as default value below*
 		"first_byte",
 		"last_byte",
 		"connect inflight",
 		"first_byte inflight",
 		"last_byte inflight",
 	}
+	DefaultMethod = SupportedMethods[0]
 )
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
@@ -507,7 +515,7 @@ func (cfgtor *Configurator) createStreamUpstream(svc *v1.Service, svcPort *v1.Se
 		}
 		if algo == "least_time" {
 			if val, ok = annotations.GetMethod(svc); ok {
-				for _, current := range supportedMethods {
+				for _, current := range SupportedMethods {
 					if val == current {
 						method = val
 						break

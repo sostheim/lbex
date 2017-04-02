@@ -94,6 +94,9 @@ func nodeUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 			glog.V(5).Infof("UpdateFunc: filtering out node object")
 			return
 		}
+		// TODO: Replace DeepEqual with a comparison that ignores the
+		//       status.condition fields (specifically the timestamps).
+		//       Would also be more peformant than reflect.
 		if !reflect.DeepEqual(obj, newObj) {
 			glog.V(5).Infof("UpdateFunc: enqueuing unequal node object")
 			lbex.nodesQueue.Enqueue(newObj)
