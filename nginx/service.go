@@ -5,13 +5,17 @@ import (
 )
 
 var (
+	// SupportedAlgorithms - NGINX load balanacing upstream directives
 	SupportedAlgorithms = []string{
 		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
 		"leastconn",  // selects the server with the smaller number of current active connections.
 		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
 	}
+	// DefaultAlgorithm - round robin
 	DefaultAlgorithm = SupportedAlgorithms[0]
 
+	// SupportedMethods - for NGINX load balanacing upstream directives leasttime:
+	// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time
 	SupportedMethods = []string{
 		"connect", // *set as default value below*
 		"first_byte",
@@ -20,6 +24,7 @@ var (
 		"first_byte inflight",
 		"last_byte inflight",
 	}
+	//DefaultMethod - connect
 	DefaultMethod = SupportedMethods[0]
 
 	// UpstreamTypes - service upstream pool target types
@@ -31,12 +36,12 @@ var (
 	// DefaultUpstreamType - default service upstream pool target type
 	DefaultUpstreamType = UpstreamTypes[0]
 
-	// NodeSelectionSets - node set selection
+	// NodeAddressType - node IP address type
 	NodeAddressType = []string{
 		"internal", // *set as default value below*
 		"external",
 	}
-	// DefaultNodeSet- default node set
+	// DefaultNodeAddressType - default address type
 	DefaultNodeAddressType = NodeAddressType[0]
 
 	// NodeSelectionSets - node set selection
@@ -45,7 +50,7 @@ var (
 		// "n+1", --> TODO: add n+1 case suuport
 		"all",
 	}
-	// DefaultNodeSet- default node set
+	// DefaultNodeSet - default node set
 	DefaultNodeSet = NodeSelectionSets[0]
 )
 

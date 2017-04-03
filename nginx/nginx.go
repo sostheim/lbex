@@ -15,9 +15,13 @@ import (
 type Configuration uint8
 
 const (
+	// LocalCfg - running test on local machine (no NGINX server)
 	LocalCfg = Configuration(iota)
+	// StreamCfg - NGINX server configuration for TCP/UDP Streams only
 	StreamCfg
+	// HTTPCfg - NGINX server configuration for HTTP only
 	HTTPCfg
+	// StreamHTTPCfg - NGINX server configuration for TCP/UDP Streams and HTTP services
 	StreamHTTPCfg
 )
 

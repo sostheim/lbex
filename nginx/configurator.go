@@ -39,7 +39,7 @@ func NewConfigurator(ngxc *NginxController) *Configurator {
 }
 
 func serviceListByNodeAddress(address string) (list []string) {
-	// TODO: replace this nested loop search with a reverse map nodeIPs -> service keys
+	// TODO: should probably replace this nested loop search with a reverse map nodeIPs -> service keys
 	for svc, nodeList := range serviceNodes {
 		for _, node := range nodeList {
 			if node.InternalIP == address || node.ExternalIP == address {
@@ -51,8 +51,24 @@ func serviceListByNodeAddress(address string) (list []string) {
 	return
 }
 
+func serviceListByNodeName(name string) (list []string) {
+	// TODO: should probably replace this nested loop search with a reverse map names -> service keys
+	for svc, nodeList := range serviceNodes {
+		for _, node := range nodeList {
+			if node.Name == name {
+				list = append(list, svc)
+				break
+			}
+		}
+	}
+	return
+}
+
 // AddOrUpdateNode - add, update (including removing) the node from the set of upstream candidates
 func (cfgtor *Configurator) AddOrUpdateNode(node Node) []string {
+	cfgtor.lock.Lock()
+	defer cfgtor.lock.Unlock()
+
 	services := []string{}
 	elem, ok := nodes[node.Name]
 	if !ok {
@@ -68,6 +84,7 @@ func (cfgtor *Configurator) AddOrUpdateNode(node Node) []string {
 			nodes[node.Name] = node
 		} else {
 			delete(nodes, node.Name)
+			services = serviceListByNodeName(node.Name)
 		}
 	}
 	return services
@@ -94,7 +111,7 @@ func (cfgtor *Configurator) AddOrUpdateDHParam(content string) (string, error) {
 // AddOrUpdateIngress adds or updates NGINX configuration for an Ingress resource
 func (cfgtor *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) error {
 	if cfgtor.ngxc.cfgType != HTTPCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return errors.New("ddOrUpdateIngress: I'm sorry Dave, I'm afraid I can't do that")
+		return errors.New("addOrUpdateIngress: I'm sorry Dave, I'm afraid I can't do that")
 	}
 
 	cfgtor.lock.Lock()
