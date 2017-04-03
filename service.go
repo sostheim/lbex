@@ -26,9 +26,25 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
-var (
-	lbAPIPort = 8081
-)
+// Endpoint models all the information needed to target an endpoint.
+type Endpoint struct {
+	// ServicePort - the port that to listen on for the service's external clients
+	ServicePort int
+	// NodeIP - the IP address of a host/worker node
+	NodeIP string
+	// NodeName - the name of a host/worker node
+	NodeName string
+	// NodePort - the port that the host/worker node listens on for fowarding to the pod/ip:port
+	NodePort int
+	// PortName - the name of the port if present, or 'unnamed' otherwise
+	PortName string
+	// PodIP - the pods ip address
+	PodIP string
+	// PodPort - the port the that the pod listens on
+	PodPort int
+	// Protocol - TCP or UDP
+	Protocol string
+}
 
 // Service models a backend service entry in the load balancer config.
 // The Ep field can contain the ips of the pods that make up a service, or the
@@ -36,7 +52,12 @@ var (
 // and kubernetes handles loadbalancing across the service endpoints).
 type Service struct {
 	Name string
-	Ep   []string
+
+	// TODO: remove deprecated field
+	// Deprecated: left intact for backwards compatability for Ingress
+	Ep []string
+
+	Endpoints []Endpoint
 
 	// Kubernetes endpoint port.
 	BackendPort int
