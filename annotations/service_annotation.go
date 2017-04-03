@@ -45,6 +45,12 @@ const (
 
 	// LBEXUpstreamType - upstream server target type
 	LBEXUpstreamType = "loadbalancer.lbex/upstream-type"
+
+	// LBEXNodeAddressType - node address type
+	LBEXNodeAddressType = "loadbalancer.lbex/node-address-type"
+
+	// LBEXNodeSet - set of nodes to load balance across
+	LBEXNodeSet = "loadbalancer.lbex/node-address-type"
 )
 
 // serviceAnnotations - map of key:value annotations discoverd for LBEX
@@ -250,6 +256,30 @@ func GetResolver(obj interface{}) (string, bool) {
 // the value was present
 func GetUpstreamType(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXUpstreamType, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// GetNodeAddressType returns the string value of the annotations, or the
+// empty string if not present, and a bool to indicate wether or not
+// the value was present
+func GetNodeAddressType(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXNodeAddressType, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// GetNodeSet returns the string value of the annotations, or the
+// empty string if not present, and a bool to indicate wether or not
+// the value was present
+func GetNodeSet(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXNodeSet, obj)
 	if err != nil && !IsMissingAnnotations(err) {
 		glog.V(3).Infof("unexpected error reading annotation: %v", err)
 		return "", false

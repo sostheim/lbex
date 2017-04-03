@@ -28,9 +28,25 @@ var (
 		"pod",
 		"cluster-ip",
 	}
-
 	// DefaultUpstreamType - default service upstream pool target type
 	DefaultUpstreamType = UpstreamTypes[0]
+
+	// NodeSelectionSets - node set selection
+	NodeAddressType = []string{
+		"internal", // *set as default value below*
+		"external",
+	}
+	// DefaultNodeSet- default node set
+	DefaultNodeAddressType = NodeAddressType[0]
+
+	// NodeSelectionSets - node set selection
+	NodeSelectionSets = []string{
+		"host", // *set as default value below*
+		"n+1",
+		"all",
+	}
+	// DefaultNodeSet- default node set
+	DefaultNodeSet = NodeSelectionSets[0]
 )
 
 // Target is a service network topology target
@@ -110,4 +126,36 @@ func ValidateUpstreamType(ups string) string {
 		return DefaultUpstreamType
 	}
 	return ups
+}
+
+// ValidateNodeAddressType - returns the input 'set' selection iff it is a
+// valid value from NodeAddressType, otherwise returns default type value
+func ValidateNodeAddressType(at string) string {
+	found := false
+	for _, current := range NodeAddressType {
+		if at == current {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return DefaultNodeAddressType
+	}
+	return at
+}
+
+// ValidateNodeSet - returns the input 'set' selection iff it is a valid value
+// from NodeSelectionSets, otherwise returns default set value
+func ValidateNodeSet(set string) string {
+	found := false
+	for _, current := range NodeSelectionSets {
+		if set == current {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return DefaultNodeSet
+	}
+	return set
 }
