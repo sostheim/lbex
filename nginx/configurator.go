@@ -51,7 +51,7 @@ func serviceListByNodeAddress(address string) (list []string) {
 	return
 }
 
-// AddOrUpdateNode - add, update (including removing) the node from teh set of upstream candidates
+// AddOrUpdateNode - add, update (including removing) the node from the set of upstream candidates
 func (cfgtor *Configurator) AddOrUpdateNode(node Node) []string {
 	services := []string{}
 	elem, ok := nodes[node.Name]
@@ -86,7 +86,7 @@ func (cfgtor *Configurator) DeleteNode(key string) []string {
 // AddOrUpdateDHParam adds the content string to parameters
 func (cfgtor *Configurator) AddOrUpdateDHParam(content string) (string, error) {
 	if cfgtor.ngxc.cfgType != HTTPCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return "", errors.New("AddOrUpdateDHParam: I'm sorry Dave, I'm afraid I can't do that.")
+		return "", errors.New("addOrUpdateDHParam: I'm sorry Dave, I'm afraid I can't do that")
 	}
 	return cfgtor.ngxc.AddOrUpdateDHParam(content)
 }
@@ -94,7 +94,7 @@ func (cfgtor *Configurator) AddOrUpdateDHParam(content string) (string, error) {
 // AddOrUpdateIngress adds or updates NGINX configuration for an Ingress resource
 func (cfgtor *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) error {
 	if cfgtor.ngxc.cfgType != HTTPCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return errors.New("AddOrUpdateIngress: I'm sorry Dave, I'm afraid I can't do that.")
+		return errors.New("ddOrUpdateIngress: I'm sorry Dave, I'm afraid I can't do that")
 	}
 
 	cfgtor.lock.Lock()
@@ -112,13 +112,13 @@ func (cfgtor *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) er
 // AddOrUpdateService adds or updates NGINX configuration for an Service object
 func (cfgtor *Configurator) AddOrUpdateService(svc *ServiceSpec) error {
 	if cfgtor.ngxc.cfgType != StreamCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return errors.New("AddOrUpdateService: I'm sorry Dave, I'm afraid I can't do that.")
+		return errors.New("addOrUpdateService: I'm sorry Dave, I'm afraid I can't do that")
 	}
 
 	cfgtor.lock.Lock()
 	defer cfgtor.lock.Unlock()
 
-	nginxCfg := cfgtor.generateServiceNginxConfig(svc)
+	nginxCfg := cfgtor.generateStreamNginxConfig(svc)
 	cfgtor.ngxc.AddOrUpdateStream(svc.ConfigName, nginxCfg)
 	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload adding or updating service %q: %q", svc.ConfigName, err)
@@ -278,19 +278,20 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 	return HTTPNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }
 
-func (cfgtor *Configurator) generateServiceNginxConfig(svc *ServiceSpec) (svcConfig StreamNginxConfig) {
+func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConfig StreamNginxConfig) {
 	if val, ok := annotations.GetResolver(svc.Service); ok {
 		svcConfig.Resolver = val
 	}
-	for _, svcPort := range svc.Service.Spec.Ports {
+	for _, target := range svc.Topology {
 		var upstream StreamUpstream
 		switch svc.UpstreamType {
 		// TODO: Convert these string to consts...
 		case "node":
-			upstream = cfgtor.createNodesStreamUpstream(svc.Service, &svcPort)
+			upstream = cfgtor.createNodesStreamUpstream(svc, target)
 		case "pod":
-			upstream = cfgtor.createNodesStreamUpstream(svc.Service, &svcPort)
+			upstream = cfgtor.createPodStreamUpstream(svc, target)
 		case "cluster-ip":
+			upstream = cfgtor.createClusterStreamUpstream(svc, target)
 		}
 		upstream.Algorithm = svc.Algorithm
 		if upstream.Algorithm == "least_time" {
@@ -302,8 +303,8 @@ func (cfgtor *Configurator) generateServiceNginxConfig(svc *ServiceSpec) (svcCon
 
 		server := StreamServer{
 			Listen: StreamListen{
-				Port: strconv.Itoa(int(svcPort.Port)),
-				UDP:  (svcPort.Protocol == "upd" || svcPort.Protocol == "UDP"),
+				Port: strconv.Itoa(int(target.ServicePort)),
+				UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
 			},
 			ProxyProtocol:    false,
 			ProxyPassAddress: upstream.Name,
@@ -458,17 +459,17 @@ func parseRewrites(service string) (serviceName string, rewrite string, err erro
 	parts := strings.SplitN(service, " ", 2)
 
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid rewrite format: %s\n", service)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", service)
 	}
 
 	svcNameParts := strings.Split(parts[0], "=")
 	if len(svcNameParts) != 2 {
-		return "", "", fmt.Errorf("invalid rewrite format: %s\n", svcNameParts)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", svcNameParts)
 	}
 
 	rwPathParts := strings.Split(parts[1], "=")
 	if len(rwPathParts) != 2 {
-		return "", "", fmt.Errorf("invalid rewrite format: %s\n", rwPathParts)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", rwPathParts)
 	}
 
 	return svcNameParts[1], rwPathParts[1], nil
@@ -521,14 +522,64 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 	return ups
 }
 
-func (cfgtor *Configurator) createNodesStreamUpstream(svc *v1.Service, svcPort *v1.ServicePort) StreamUpstream {
-	name := getNameForStreamUpstream(svc, svcPort.Name)
+func (cfgtor *Configurator) createClusterStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
+	name := getNameForStreamUpstream(spec.Service, target.PortName)
+	return StreamUpstream{
+		Name: name,
+		UpstreamServers: []StreamUpstreamServer{
+			StreamUpstreamServer{Address: spec.ClusterIP + ":" + strconv.Itoa(target.ServicePort)}},
+	}
+}
+
+func (cfgtor *Configurator) createPodStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
+	name := getNameForStreamUpstream(spec.Service, target.PortName)
+	return StreamUpstream{
+		Name: name,
+		UpstreamServers: []StreamUpstreamServer{
+			StreamUpstreamServer{Address: target.PodIP + ":" + strconv.Itoa(target.PodPort)}},
+	}
+}
+
+func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
+	val, _ := annotations.GetNodeSet(spec.Service)
+	set := ValidateNodeSet(val)
+
+	val, _ = annotations.GetNodeAddressType(spec.Service)
+	addressType := ValidateNodeAddressType(val)
+
+	name := getNameForStreamUpstream(spec.Service, target.PortName)
 	su := StreamUpstream{
 		Name: name,
 	}
-	for _, node := range nodes {
-		sus := StreamUpstreamServer{Address: node.InternalIP + ":" + strconv.Itoa(int(svcPort.NodePort))}
+
+	// TODO: Add n+1 case
+	// TODO: replace string case labels with consts...
+	// TODO: refactor repeated address string creation
+	switch set {
+	case "node":
+		node, ok := nodes[target.NodeName]
+		if !ok {
+			break
+		}
+		var address string
+		if addressType == "internal" {
+			address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
+		} else {
+			address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
+		}
+		sus := StreamUpstreamServer{Address: address}
 		su.UpstreamServers = append(su.UpstreamServers, sus)
+	case "all":
+		for _, node := range nodes {
+			var address string
+			if addressType == "internal" {
+				address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
+			} else {
+				address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
+			}
+			sus := StreamUpstreamServer{Address: address}
+			su.UpstreamServers = append(su.UpstreamServers, sus)
+		}
 	}
 	return su
 }
@@ -581,7 +632,7 @@ func (cfgtor *Configurator) DeleteConfiguration(name string, cfgType Configurati
 // UpdateIngressEndpoints updates endpoints in NGINX configuration for an Ingress resource
 func (cfgtor *Configurator) UpdateIngressEndpoints(name string, ingEx *IngressEx) error {
 	if cfgtor.ngxc.cfgType != HTTPCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return errors.New("UpdateIngressEndpoints: I'm sorry Dave, I'm afraid I can't do that.")
+		return errors.New("updateIngressEndpoints: I'm sorry Dave, I'm afraid I can't do that")
 	}
 	cfgtor.AddOrUpdateIngress(name, ingEx)
 	return nil
@@ -590,7 +641,7 @@ func (cfgtor *Configurator) UpdateIngressEndpoints(name string, ingEx *IngressEx
 // UpdateServiceEndpoints updates endpoints in NGINX configuration for a Service
 func (cfgtor *Configurator) UpdateServiceEndpoints(svc *ServiceSpec) error {
 	if cfgtor.ngxc.cfgType != StreamCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
-		return errors.New("UpdateServiceEndpoints: I'm sorry Dave, I'm afraid I can't do that.")
+		return errors.New("updateServiceEndpoints: I'm sorry Dave, I'm afraid I can't do that")
 	}
 	cfgtor.AddOrUpdateService(svc)
 	return nil

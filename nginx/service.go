@@ -42,7 +42,7 @@ var (
 	// NodeSelectionSets - node set selection
 	NodeSelectionSets = []string{
 		"host", // *set as default value below*
-		"n+1",
+		// "n+1", --> TODO: add n+1 case suuport
 		"all",
 	}
 	// DefaultNodeSet- default node set
