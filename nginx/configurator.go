@@ -17,25 +17,6 @@ import (
 const emptyHost = ""
 
 var (
-	SupportedAlgorithms = []string{
-		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
-		"leastconn",  // selects the server with the smaller number of current active connections.
-		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
-	}
-	DefaultAlgorithm = SupportedAlgorithms[0]
-
-	SupportedMethods = []string{
-		"connect", // *set as default value below*
-		"first_byte",
-		"last_byte",
-		"connect inflight",
-		"first_byte inflight",
-		"last_byte inflight",
-	}
-	DefaultMethod = SupportedMethods[0]
-)
-
-var (
 	// map node names (key) to Node type
 	nodes = make(map[string]Node)
 	// map service key to nodes that populate the services upstream
@@ -129,7 +110,7 @@ func (cfgtor *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) er
 }
 
 // AddOrUpdateService adds or updates NGINX configuration for an Service object
-func (cfgtor *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) error {
+func (cfgtor *Configurator) AddOrUpdateService(svc *ServiceSpec) error {
 	if cfgtor.ngxc.cfgType != StreamCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
 		return errors.New("AddOrUpdateService: I'm sorry Dave, I'm afraid I can't do that.")
 	}
@@ -138,9 +119,9 @@ func (cfgtor *Configurator) AddOrUpdateService(name string, svc *ServiceSpec) er
 	defer cfgtor.lock.Unlock()
 
 	nginxCfg := cfgtor.generateServiceNginxConfig(svc)
-	cfgtor.ngxc.AddOrUpdateStream(name, nginxCfg)
+	cfgtor.ngxc.AddOrUpdateStream(svc.ConfigName, nginxCfg)
 	if err := cfgtor.ngxc.Reload(); err != nil {
-		glog.Errorf("error on reload adding or updating service %q: %q", name, err)
+		glog.Errorf("error on reload adding or updating service %q: %q", svc.ConfigName, err)
 	}
 	return nil
 }
@@ -302,7 +283,21 @@ func (cfgtor *Configurator) generateServiceNginxConfig(svc *ServiceSpec) (svcCon
 		svcConfig.Resolver = val
 	}
 	for _, svcPort := range svc.Service.Spec.Ports {
-		upstream := cfgtor.createStreamUpstream(svc.Service, &svcPort)
+		var upstream StreamUpstream
+		switch svc.UpstreamType {
+		// TODO: Convert these string to consts...
+		case "node":
+			upstream = cfgtor.createNodesStreamUpstream(svc.Service, &svcPort)
+		case "pod":
+			upstream = cfgtor.createNodesStreamUpstream(svc.Service, &svcPort)
+		case "cluster-ip":
+		}
+		upstream.Algorithm = svc.Algorithm
+		if upstream.Algorithm == "least_time" {
+			val, _ := annotations.GetMethod(svc)
+			upstream.LeastTimeMethod = ValidateMethod(val)
+		}
+
 		svcConfig.Upstreams = append(svcConfig.Upstreams, upstream)
 
 		server := StreamServer{
@@ -526,28 +521,10 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 	return ups
 }
 
-func (cfgtor *Configurator) createStreamUpstream(svc *v1.Service, svcPort *v1.ServicePort) StreamUpstream {
+func (cfgtor *Configurator) createNodesStreamUpstream(svc *v1.Service, svcPort *v1.ServicePort) StreamUpstream {
 	name := getNameForStreamUpstream(svc, svcPort.Name)
-	var algo, method string
-	if val, ok := annotations.GetAlgorithm(svc); ok {
-		if val != "roundrobin" {
-			algo = val
-		}
-		if algo == "least_time" {
-			if val, ok = annotations.GetMethod(svc); ok {
-				for _, current := range SupportedMethods {
-					if val == current {
-						method = val
-						break
-					}
-				}
-			}
-		}
-	}
 	su := StreamUpstream{
-		Name:            name,
-		Algorithm:       algo,
-		LeastTimeMethod: method,
+		Name: name,
 	}
 	for _, node := range nodes {
 		sus := StreamUpstreamServer{Address: node.InternalIP + ":" + strconv.Itoa(int(svcPort.NodePort))}
@@ -611,11 +588,11 @@ func (cfgtor *Configurator) UpdateIngressEndpoints(name string, ingEx *IngressEx
 }
 
 // UpdateServiceEndpoints updates endpoints in NGINX configuration for a Service
-func (cfgtor *Configurator) UpdateServiceEndpoints(name string, svc *ServiceSpec) error {
+func (cfgtor *Configurator) UpdateServiceEndpoints(svc *ServiceSpec) error {
 	if cfgtor.ngxc.cfgType != StreamCfg && cfgtor.ngxc.cfgType != StreamHTTPCfg {
 		return errors.New("UpdateServiceEndpoints: I'm sorry Dave, I'm afraid I can't do that.")
 	}
-	cfgtor.AddOrUpdateService(name, svc)
+	cfgtor.AddOrUpdateService(svc)
 	return nil
 }
 

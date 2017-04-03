@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	// LBAnnotationKey picks a specific "class" for the specified load balancer.
-	LBAnnotationKey = "kubernetes.io/loadbalancer.class"
+	// LBEXClassKey picks a specific "class" for the specified load balancer.
+	LBEXClassKey = "kubernetes.io/loadbalancer-class"
 
-	// LBEXValue - this controller only processes Services with this annotation.
-	LBEXValue = "loadbalancer.lbex"
+	// LBEXClassKeyValue - this controller only processes Services with this annotation.
+	LBEXClassKeyValue = "loadbalancer.lbex"
 
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
@@ -42,6 +42,9 @@ const (
 
 	// LBEXResolverKey - DNS Resolver for DNS based service names (if any)
 	LBEXResolverKey = "loadbalancer.lbex/resolver"
+
+	// LBEXUpstreamType - upstream server target type
+	LBEXUpstreamType = "loadbalancer.lbex/upstream-type"
 )
 
 // serviceAnnotations - map of key:value annotations discoverd for LBEX
@@ -180,9 +183,26 @@ func GetIntAnnotation(name string, obj interface{}) (int, error) {
 	return 0, ErrMissingAnnotations
 }
 
-// GetAlgorithm returns the string value of the annotations, or
-// the empty string if not present, and a bool to indicate wether
-// or not the value was present
+// GetClass returns the string value of the annotations, or the empty string if
+// not present, and a bool to indicate wether or not the value was present
+func GetClass(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXClassKey, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// IsValid returns true if the given Service object specifies 'lbex' as the
+// value to the loadbalancer.class annotation.
+func IsValid(obj interface{}) bool {
+	class, _ := GetClass(obj)
+	return class == LBEXClassKeyValue
+}
+
+// GetAlgorithm returns the string value of the annotations, or the empty
+// string if not present, and bool indicate whether the value was present
 func GetAlgorithm(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXAlgorithmKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
@@ -192,9 +212,8 @@ func GetAlgorithm(obj interface{}) (string, bool) {
 	return value, true
 }
 
-// GetMethod returns the string value of the annotations, or
-// the empty string if not present, and a bool to indicate wether
-// or not the value was present
+// GetMethod returns the string value of the annotations, or the empty string
+// if not present, and a bool to indicate wether or not the value was present
 func GetMethod(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXMethodKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
@@ -204,9 +223,8 @@ func GetMethod(obj interface{}) (string, bool) {
 	return value, true
 }
 
-// GetHost returns the string value of the annotations, or the
-// empty string if not present, and a bool to indicate wether
-// or not the value was present
+// GetHost returns the string value of the annotations, or the empty string if
+// not present, and a bool to indicate wether or not the value was present
 func GetHost(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXHostKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
@@ -216,9 +234,8 @@ func GetHost(obj interface{}) (string, bool) {
 	return value, true
 }
 
-// GetResolver returns the string value of the annotations, or the
-// empty string if not present, and a bool to indicate wether
-// or not the value was present
+// GetResolver returns the string value of the annotations, or the empty string
+// if not present, and a bool to indicate wether or not the value was present
 func GetResolver(obj interface{}) (string, bool) {
 	value, err := GetStringAnnotation(LBEXResolverKey, obj)
 	if err != nil && !IsMissingAnnotations(err) {
@@ -228,12 +245,14 @@ func GetResolver(obj interface{}) (string, bool) {
 	return value, true
 }
 
-// IsValid returns true if the given Service object specifies 'lbex' as the value
-// to the loadbalancer.class annotation.
-func IsValid(obj interface{}) bool {
-	value, err := GetStringAnnotation(LBAnnotationKey, obj)
+// GetUpstreamType returns the string value of the annotations, or the
+// empty string if not present, and a bool to indicate wether or not
+// the value was present
+func GetUpstreamType(obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(LBEXUpstreamType, obj)
 	if err != nil && !IsMissingAnnotations(err) {
 		glog.V(3).Infof("unexpected error reading annotation: %v", err)
+		return "", false
 	}
-	return value == LBEXValue
+	return value, true
 }
