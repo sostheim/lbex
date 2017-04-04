@@ -29,7 +29,7 @@ const (
 	LBEXClassKey = "kubernetes.io/loadbalancer-class"
 
 	// LBEXClassKeyValue - this controller only processes Services with this annotation.
-	LBEXClassKeyValue = "loadbalancer.lbex"
+	LBEXClassKeyValue = "loadbalancer-lbex"
 
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
@@ -50,7 +50,7 @@ const (
 	LBEXNodeAddressType = "loadbalancer.lbex/node-address-type"
 
 	// LBEXNodeSet - set of nodes to load balance across
-	LBEXNodeSet = "loadbalancer.lbex/node-address-type"
+	LBEXNodeSet = "loadbalancer.lbex/node-set"
 )
 
 // serviceAnnotations - map of key:value annotations discoverd for LBEX
@@ -155,7 +155,7 @@ func GetBoolAnnotation(name string, obj interface{}) (bool, error) {
 	return false, ErrMissingAnnotations
 }
 
-// GetStringAnnotation extracts a string from service annotation
+// GetStringAnnotation extracts a string from an annotation or returns an error
 func GetStringAnnotation(name string, obj interface{}) (string, error) {
 	err := checkAnnotation(name, obj)
 	if err != nil {
@@ -172,7 +172,19 @@ func GetStringAnnotation(name string, obj interface{}) (string, error) {
 	return "", ErrMissingAnnotations
 }
 
-// GetIntAnnotation extracts an int from an Ingress annotation
+// GetOptionalStringAnnotation returns the string value of the annotations, or
+// the empty string if not present, and a bool to indicate wether or not the
+// value was present
+func GetOptionalStringAnnotation(name string, obj interface{}) (string, bool) {
+	value, err := GetStringAnnotation(name, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.Warningf("unexpected error reading annotation: %v", err)
+		return "", false
+	}
+	return value, true
+}
+
+// GetIntAnnotation extracts an int from an annotation or returns an error
 func GetIntAnnotation(name string, obj interface{}) (int, error) {
 	err := checkAnnotation(name, obj)
 	if err != nil {
@@ -187,6 +199,18 @@ func GetIntAnnotation(name string, obj interface{}) (int, error) {
 		return serviceAnnotations(service.GetAnnotations()).parseInt(name)
 	}
 	return 0, ErrMissingAnnotations
+}
+
+// GetOptionalIntAnnotation returns the integer value of the annotations, or
+// the int zero value if not present, and a bool to indicate wether or not the
+// value was present
+func GetOptionalIntAnnotation(name string, obj interface{}) (int, bool) {
+	value, err := GetIntAnnotation(name, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.Warningf("unexpected error reading annotation: %v", err)
+		return 0, false
+	}
+	return value, true
 }
 
 // GetClass returns the string value of the annotations, or the empty string if

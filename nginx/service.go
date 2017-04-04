@@ -7,9 +7,9 @@ import (
 var (
 	// SupportedAlgorithms - NGINX load balanacing upstream directives
 	SupportedAlgorithms = []string{
-		"roundrobin", // *set as default below* direct traffic sequentially to the servers.
-		"leastconn",  // selects the server with the smaller number of current active connections.
-		"leasttime",  // selects the server with the lowest average latency and the least number of active connections.
+		"round_robin", // *set as default below* direct traffic sequentially to the servers.
+		"least_conn",  // selects the server with the smaller number of current active connections.
+		"least_time",  // selects the server with the lowest average latency and the least number of active connections.
 	}
 	// DefaultAlgorithm - round robin
 	DefaultAlgorithm = SupportedAlgorithms[0]
