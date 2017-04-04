@@ -19,8 +19,17 @@ const emptyHost = ""
 var (
 	// map node names (key) to Node type
 	nodes = make(map[string]Node)
+
+	// Why isn't this a map of []inerface{} types, so we can just insert either
+	// Nodes are Targest against the same key?  For example:
+	//    -> serviceUpstreams = make(map[string][]interface{})
+	// See this disucssion: https://github.com/golang/go/wiki/InterfaceSlice
+
 	// map service key to nodes that populate the services upstream
-	serviceNodes = make(map[string][]Node)
+	serviceUpstreamNodes = make(map[string][]Node)
+
+	// map service key to the target that populate the services upstream
+	serviceUpstreamTarget = make(map[string]Target)
 )
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
@@ -39,9 +48,9 @@ func NewConfigurator(ngxc *NginxController) *Configurator {
 }
 
 func serviceListByNodeAddress(address string) (list []string) {
-	// TODO: should probably replace this nested loop search with a reverse map nodeIPs -> service keys
-	for svc, nodeList := range serviceNodes {
-		for _, node := range nodeList {
+	// TODO: should probably replace this nested loop search with a reverse map -> service keys
+	for svc, upstreamNodes := range serviceUpstreamNodes {
+		for _, node := range upstreamNodes {
 			if node.InternalIP == address || node.ExternalIP == address {
 				list = append(list, svc)
 				break
@@ -52,9 +61,9 @@ func serviceListByNodeAddress(address string) (list []string) {
 }
 
 func serviceListByNodeName(name string) (list []string) {
-	// TODO: should probably replace this nested loop search with a reverse map names -> service keys
-	for svc, nodeList := range serviceNodes {
-		for _, node := range nodeList {
+	// TODO: should probably replace this nested loop search with a reverse map -> service keys
+	for svc, upstreamNodes := range serviceUpstreamNodes {
+		for _, node := range upstreamNodes {
 			if node.Name == name {
 				list = append(list, svc)
 				break
@@ -72,17 +81,20 @@ func (cfgtor *Configurator) AddOrUpdateNode(node Node) []string {
 	services := []string{}
 	elem, ok := nodes[node.Name]
 	if !ok {
+		glog.V(4).Infof("add new node: %v", node)
 		nodes[node.Name] = node
 	} else {
 		if node.Active {
+			glog.V(4).Infof("update existing active node: %v", node)
+			nodes[node.Name] = node
 			if elem.InternalIP != node.InternalIP {
 				services = serviceListByNodeAddress(elem.InternalIP)
 			}
 			if elem.ExternalIP != node.ExternalIP {
 				services = append(services, serviceListByNodeAddress(elem.ExternalIP)...)
 			}
-			nodes[node.Name] = node
 		} else {
+			glog.V(4).Infof("update (delete) existing inactive node: %v", node)
 			delete(nodes, node.Name)
 			services = serviceListByNodeName(node.Name)
 		}
@@ -299,6 +311,7 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 	if val, ok := annotations.GetResolver(svc.Service); ok {
 		svcConfig.Resolver = val
 	}
+
 	for _, target := range svc.Topology {
 		var upstream StreamUpstream
 		switch svc.UpstreamType {
@@ -309,10 +322,16 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 			upstream = cfgtor.createPodStreamUpstream(svc, target)
 		case "cluster-ip":
 			upstream = cfgtor.createClusterStreamUpstream(svc, target)
+		default:
+			glog.Warningf("hit a switch case DEFAULT <---> %v", svc.UpstreamType)
 		}
-		upstream.Algorithm = svc.Algorithm
+		// Since RR is the default and diretives only over-ride the default,
+		// you *can't* set "roundrobin", or the configuration will be rejected.
+		if svc.Algorithm != "round_robin" {
+			upstream.Algorithm = svc.Algorithm
+		}
 		if upstream.Algorithm == "least_time" {
-			val, _ := annotations.GetMethod(svc)
+			val, _ := annotations.GetMethod(svc.Service)
 			upstream.LeastTimeMethod = ValidateMethod(val)
 		}
 
@@ -540,6 +559,7 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 }
 
 func (cfgtor *Configurator) createClusterStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
+	serviceUpstreamTarget[spec.Key] = target
 	name := getNameForStreamUpstream(spec.Service, target.PortName)
 	return StreamUpstream{
 		Name: name,
@@ -549,6 +569,7 @@ func (cfgtor *Configurator) createClusterStreamUpstream(spec *ServiceSpec, targe
 }
 
 func (cfgtor *Configurator) createPodStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
+	serviceUpstreamTarget[spec.Key] = target
 	name := getNameForStreamUpstream(spec.Service, target.PortName)
 	return StreamUpstream{
 		Name: name,
@@ -564,29 +585,36 @@ func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target 
 	val, _ = annotations.GetNodeAddressType(spec.Service)
 	addressType := ValidateNodeAddressType(val)
 
-	name := getNameForStreamUpstream(spec.Service, target.PortName)
 	su := StreamUpstream{
-		Name: name,
+		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 	}
 
-	// TODO: Add n+1 case
+	glog.V(4).Infof("node set: %s, address type: %s, stream name: %s", set, addressType, su.Name)
+
+	// TODO: Add "n+1"case
 	// TODO: replace string case labels with consts...
 	// TODO: refactor repeated address string creation
 	switch set {
-	case "node":
+	case "host":
 		node, ok := nodes[target.NodeName]
 		if !ok {
+			glog.Warningf("node nodes map entry found for: %s", target.NodeName)
 			break
 		}
 		var address string
 		if addressType == "internal" {
 			address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
 		} else {
+			// else: assumes only other option is "external" - true for now at least...
 			address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
 		}
-		sus := StreamUpstreamServer{Address: address}
-		su.UpstreamServers = append(su.UpstreamServers, sus)
+		glog.V(4).Infof("upstream server address: %s", address)
+		su.UpstreamServers = append(su.UpstreamServers, StreamUpstreamServer{Address: address})
+
+		serviceUpstreamNodes[spec.Key] = []Node{node}
+
 	case "all":
+		upstreamNodes := []Node{}
 		for _, node := range nodes {
 			var address string
 			if addressType == "internal" {
@@ -594,9 +622,13 @@ func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target 
 			} else {
 				address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
 			}
-			sus := StreamUpstreamServer{Address: address}
-			su.UpstreamServers = append(su.UpstreamServers, sus)
+			glog.V(4).Infof("adding upstream server address: %s", address)
+			su.UpstreamServers = append(su.UpstreamServers, StreamUpstreamServer{Address: address})
+			upstreamNodes = append(upstreamNodes, node)
 		}
+		serviceUpstreamNodes[spec.Key] = upstreamNodes
+	default:
+		glog.Warningf("hit a switch case DEFAULT <---> %s", set)
 	}
 	return su
 }
@@ -640,7 +672,11 @@ func (cfgtor *Configurator) DeleteConfiguration(name string, cfgType Configurati
 	case StreamHTTPCfg:
 		cfgtor.ngxc.DeleteStreamConfiguration(name)
 		cfgtor.ngxc.DeleteHTTPConfiguration(name)
+	default:
+		glog.Warningf("hit a switch case DEFAULT <---> %v", cfgType)
 	}
+	delete(serviceUpstreamNodes, name)
+	delete(serviceUpstreamTarget, name)
 	if err := cfgtor.ngxc.Reload(); err != nil {
 		glog.Errorf("error on reload, removing configuration: %q: %q", name, err)
 	}

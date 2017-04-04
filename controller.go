@@ -52,7 +52,7 @@ type lbExController struct {
 	endpointStore  cache.Store
 	endpointsQueue *TaskQueue
 
-	servciesLWC   *lwController
+	servicesLWC   *lwController
 	servicesStore cache.Store
 	servicesQueue *TaskQueue
 
@@ -91,7 +91,7 @@ func newLbExController(clientset *kubernetes.Clientset, service *string) *lbExCo
 	lbexc.nodesQueue = NewTaskQueue(lbexc.syncNodes)
 	lbexc.nodesLWC = newNodesListWatchControllerForClientset(&lbexc)
 	lbexc.servicesQueue = NewTaskQueue(lbexc.syncServices)
-	lbexc.servciesLWC = newServicesListWatchControllerForClientset(&lbexc)
+	lbexc.servicesLWC = newServicesListWatchControllerForClientset(&lbexc)
 	lbexc.endpointsQueue = NewTaskQueue(lbexc.syncEndpoints)
 	lbexc.endpointsLWC = newEndpointsListWatchControllerForClientset(&lbexc)
 
@@ -108,9 +108,19 @@ func (lbex *lbExController) run() {
 
 	// Allow time for the initial cache update for all nodes and endpoints to take place 1st
 	time.Sleep(5 * time.Second)
-	go lbex.servciesLWC.controller.Run(lbex.stopCh)
+	go lbex.servicesLWC.controller.Run(lbex.stopCh)
 	go lbex.servicesQueue.Run(time.Second, lbex.stopCh)
 
+}
+
+func (lbex *lbExController) enqueuServiceObjects(keys []string) {
+	for _, key := range keys {
+		obj, exists, err := lbex.servicesStore.GetByKey(key)
+		if err != nil || !exists {
+			continue
+		}
+		lbex.servicesQueue.Enqueue(obj)
+	}
 }
 
 func (lbex *lbExController) syncNodes(obj interface{}) error {
@@ -154,9 +164,12 @@ func (lbex *lbExController) syncNodes(obj interface{}) error {
 		affectedServices = lbex.cfgtor.AddOrUpdateNode(node)
 	}
 	glog.V(4).Infof("queuing updates for affected services: %v", affectedServices)
-	for _, svc := range affectedServices {
-		lbex.servicesQueue.Enqueue(svc)
-	}
+
+	// NOTE: This may be totally unnecessary, even if the node crashes unexpectedly.
+	//       Conceptually, k8s should recognize the node failure and update the
+	//       service spec and endpoints for any affected components.  This has the
+	//       potential to create a race between the k8s updates and this update.
+	lbex.enqueuServiceObjects(affectedServices)
 	return nil
 }
 
@@ -185,7 +198,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 			glog.V(3).Infof("syncServices: ValidateServiceObjectType(): err: %v", err)
 			return nil
 		}
-		service, _ := obj.(*v1.Service)
+		service, _ := storeObj.(*v1.Service)
 
 		topo := lbex.getServiceNetworkTopo(key)
 		if topo == nil || len(topo) == 0 {
@@ -200,7 +213,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 		ups := nginx.ValidateUpstreamType(val)
 
 		svcSpec := &nginx.ServiceSpec{
-			Service:      storeObj.(*v1.Service),
+			Service:      service,
 			Key:          key,
 			Algorithm:    algo,
 			ClusterIP:    service.Spec.ClusterIP,
@@ -251,7 +264,8 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 		if topo == nil || len(topo) == 0 {
 			glog.V(4).Info("syncEndpoints: not a lbex managed service endpoint")
 		} else {
-			glog.V(3).Infof("syncEndpoints: add/update lbex managed service: %s, with topo:\n%v", key, topo)
+			glog.V(3).Infof("syncEndpoints: trigger service update managed service: %s, with topo:\n%v", key, topo)
+			lbex.enqueuServiceObjects([]string{key})
 		}
 	}
 	return nil
@@ -395,7 +409,6 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 		host = val
 	}
 
-	ep := []string{}
 	endpoints := []Endpoint{}
 	for _, servicePort := range service.Spec.Ports {
 
@@ -407,7 +420,7 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 		backendPort, _ := GetServicePortTargetPortInt(&servicePort)
 		newSvc := Service{
 			Name:        GetServiceNameForLBRule(serviceName, int(servicePort.Port)),
-			Ep:          ep,
+			Ep:          []string{},
 			Endpoints:   endpoints,
 			Host:        host,
 			BackendPort: backendPort,
