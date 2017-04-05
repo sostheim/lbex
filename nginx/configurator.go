@@ -308,7 +308,7 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 }
 
 func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConfig StreamNginxConfig) {
-	if val, ok := annotations.GetResolver(svc.Service); ok {
+	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXResolverKey, svc.Service); ok {
 		svcConfig.Resolver = val
 	}
 
@@ -331,7 +331,7 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 			upstream.Algorithm = svc.Algorithm
 		}
 		if upstream.Algorithm == "least_time" {
-			val, _ := annotations.GetMethod(svc.Service)
+			val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
 			upstream.LeastTimeMethod = ValidateMethod(val)
 		}
 
@@ -579,10 +579,10 @@ func (cfgtor *Configurator) createPodStreamUpstream(spec *ServiceSpec, target Ta
 }
 
 func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
-	val, _ := annotations.GetNodeSet(spec.Service)
+	val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXNodeSet, spec.Service)
 	set := ValidateNodeSet(val)
 
-	val, _ = annotations.GetNodeAddressType(spec.Service)
+	val, _ = annotations.GetOptionalStringAnnotation(annotations.LBEXNodeAddressType, spec.Service)
 	addressType := ValidateNodeAddressType(val)
 
 	su := StreamUpstream{

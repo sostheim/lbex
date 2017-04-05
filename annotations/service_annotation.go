@@ -138,7 +138,7 @@ func GetBoolAnnotationAPI(name string, service *api.Service) (bool, error) {
 	return serviceAnnotations(service.GetAnnotations()).parseBool(name)
 }
 
-// GetBoolAnnotation extracts a boolean from service annotation
+// GetBoolAnnotation extracts a boolean from an annotation or returns an error
 func GetBoolAnnotation(name string, obj interface{}) (bool, error) {
 	err := checkAnnotation(name, obj)
 	if err != nil {
@@ -153,6 +153,18 @@ func GetBoolAnnotation(name string, obj interface{}) (bool, error) {
 		return serviceAnnotations(service.GetAnnotations()).parseBool(name)
 	}
 	return false, ErrMissingAnnotations
+}
+
+// GetOptionalBoolAnnotation returns the boolean value of the annotations, or
+// the boolean zero value if not present, and a bool to indicate wether or not
+// the value was present
+func GetOptionalBoolAnnotation(name string, obj interface{}) (bool, bool) {
+	value, err := GetBoolAnnotation(name, obj)
+	if err != nil && !IsMissingAnnotations(err) {
+		glog.Warningf("unexpected error reading annotation: %v", err)
+		return false, false
+	}
+	return value, true
 }
 
 // GetStringAnnotation extracts a string from an annotation or returns an error
@@ -213,100 +225,9 @@ func GetOptionalIntAnnotation(name string, obj interface{}) (int, bool) {
 	return value, true
 }
 
-// GetClass returns the string value of the annotations, or the empty string if
-// not present, and a bool to indicate wether or not the value was present
-func GetClass(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXClassKey, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
 // IsValid returns true if the given Service object specifies 'lbex' as the
 // value to the loadbalancer.class annotation.
 func IsValid(obj interface{}) bool {
-	class, _ := GetClass(obj)
+	class, _ := GetOptionalStringAnnotation(LBEXClassKey, obj)
 	return class == LBEXClassKeyValue
-}
-
-// GetAlgorithm returns the string value of the annotations, or the empty
-// string if not present, and bool indicate whether the value was present
-func GetAlgorithm(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXAlgorithmKey, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetMethod returns the string value of the annotations, or the empty string
-// if not present, and a bool to indicate wether or not the value was present
-func GetMethod(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXMethodKey, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetHost returns the string value of the annotations, or the empty string if
-// not present, and a bool to indicate wether or not the value was present
-func GetHost(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXHostKey, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetResolver returns the string value of the annotations, or the empty string
-// if not present, and a bool to indicate wether or not the value was present
-func GetResolver(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXResolverKey, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetUpstreamType returns the string value of the annotations, or the
-// empty string if not present, and a bool to indicate wether or not
-// the value was present
-func GetUpstreamType(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXUpstreamType, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetNodeAddressType returns the string value of the annotations, or the
-// empty string if not present, and a bool to indicate wether or not
-// the value was present
-func GetNodeAddressType(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXNodeAddressType, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
-}
-
-// GetNodeSet returns the string value of the annotations, or the
-// empty string if not present, and a bool to indicate wether or not
-// the value was present
-func GetNodeSet(obj interface{}) (string, bool) {
-	value, err := GetStringAnnotation(LBEXNodeSet, obj)
-	if err != nil && !IsMissingAnnotations(err) {
-		glog.V(3).Infof("unexpected error reading annotation: %v", err)
-		return "", false
-	}
-	return value, true
 }

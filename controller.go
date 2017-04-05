@@ -206,10 +206,10 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 			return nil
 		}
 
-		val, _ := annotations.GetAlgorithm(service)
+		val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXAlgorithmKey, service)
 		algo := nginx.ValidateAlgorithm(val)
 
-		val, _ = annotations.GetUpstreamType(service)
+		val, _ = annotations.GetOptionalStringAnnotation(annotations.LBEXUpstreamType, service)
 		ups := nginx.ValidateUpstreamType(val)
 
 		svcSpec := &nginx.ServiceSpec{
@@ -405,7 +405,7 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	}
 
 	var host string
-	if val, ok := annotations.GetHost(service); ok {
+	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXHostKey, service); ok {
 		host = val
 	}
 
