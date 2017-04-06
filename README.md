@@ -73,12 +73,12 @@ The annotations defined for LBEX are as follows:
     </tr>
     <tr>
         <td>loadbalancer.lbex/algorithm</td>
-        <td>round_robin, <br />least_conn, <br />least_time[1]</td>
+        <td>round_robin, <br />least_conn, <br />least_time<sup>[1]</sup></td>
         <td>round_robin</td>
         <td>False</td>
     </tr>
     <tr>
-        <td>loadbalancer.lbex/method[1]</td>
+        <td>loadbalancer.lbex/method<sup>[1]</sup></td>
         <td> connect, <br />first_byte, <br />last_byte, <br />connect inflight, <br />first_byte inflight, <br />last_byte inflight</td>
         <td>connect</td>
         <td>False</td>
@@ -101,7 +101,6 @@ The annotations defined for LBEX are as follows:
         <td>host</td>
         <td>False</td>
     </tr>
-        <tr>
         <td>loadbalancer.lbex/node-address-type</td>
         <td>internal, <br />external</td>
         <td>internal</td>
