@@ -36,14 +36,6 @@ var (
 	// DefaultUpstreamType - default service upstream pool target type
 	DefaultUpstreamType = UpstreamTypes[0]
 
-	// NodeAddressType - node IP address type
-	NodeAddressType = []string{
-		"internal", // *set as default value below*
-		"external",
-	}
-	// DefaultNodeAddressType - default address type
-	DefaultNodeAddressType = NodeAddressType[0]
-
 	// NodeSelectionSets - node set selection
 	NodeSelectionSets = []string{
 		"host", // *set as default value below*
@@ -52,6 +44,14 @@ var (
 	}
 	// DefaultNodeSet - default node set
 	DefaultNodeSet = NodeSelectionSets[0]
+
+	// NodeAddressType - node IP address type
+	NodeAddressType = []string{
+		"internal", // *set as default value below*
+		"external",
+	}
+	// DefaultNodeAddressType - default address type
+	DefaultNodeAddressType = NodeAddressType[0]
 )
 
 // Target is a service network topology target
