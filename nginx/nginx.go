@@ -185,9 +185,8 @@ func (ngxc *NginxController) UpdateMainConfigFile() {
 	}
 
 	filename := "/etc/nginx/nginx.conf"
-	glog.V(3).Infof("Writing NGINX conf to %v", filename)
-
-	if glog.V(3) {
+	if glog.V(2) {
+		glog.Infof("Writing NGINX conf to %v", filename)
 		tmpl.Execute(os.Stdout, ngxc.mainCfg)
 	}
 

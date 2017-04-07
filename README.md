@@ -130,7 +130,7 @@ This final two annotations are only read if, and only if, `loadbalancer.lbex/ups
 It is incumbent on the service designer to make sensible selections for annotation values.  For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with one.  It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, 2) LBEX is not running as a Pod in the cluster.  By definition a cluster IP address is only accessible to members of the cluster.
 
 ## Using LBEX Example
-Retuirning to the prvious example, here is the updated version that takes advantage of the default values for all but the one required annotation.  As before, the following [Service Specification](https://kubernetes.io/docs/concepts/services-networking/service/) would configure LBEX for the NTP Service. 
+Returning to the pervious example, here is the updated version that takes advantage of the default values for all but the one required annotation.  As before, the following [Service Specification](https://kubernetes.io/docs/concepts/services-networking/service/) would configure LBEX for the NTP Service. 
 ```
 apiVersion: v1
 kind: Service

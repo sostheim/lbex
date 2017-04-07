@@ -78,7 +78,7 @@ func IsStreamUpstreamDefault(su StreamUpstream) bool {
 // specified stream load balancer from NGINX conf directory
 func (ngxc *NginxController) DeleteStreamConfiguration(name string) {
 	filename := ngxc.getStreamConfigFileName(name)
-	glog.V(3).Infof("deleting %v", filename)
+	glog.V(2).Infof("deleting %v", filename)
 
 	if ngxc.cfgType != LocalCfg {
 		if err := os.Remove(filename); err != nil {
@@ -103,7 +103,7 @@ func (ngxc *NginxController) templateStream(config StreamNginxConfig, filename s
 		glog.Fatalf("failed to parse stream template file: %v", err)
 	}
 
-	if glog.V(3) {
+	if glog.V(2) {
 		glog.Infof("writing NGINX stream configuration to: %v", filename)
 		tmpl.Execute(os.Stdout, config)
 	}
