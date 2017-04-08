@@ -167,7 +167,7 @@ func (lbex *lbExController) syncNodes(obj interface{}) error {
 
 	// NOTE: This may be totally unnecessary, even if the node crashes unexpectedly.
 	//       Conceptually, k8s should recognize the node failure and update the
-	//       service spec and endpoints for any affected components.  This has the
+	//       service and its' endpoints for any affected components.  This has the
 	//       potential to create a race between the k8s updates and this update.
 	lbex.enqueuServiceObjects(affectedServices)
 	return nil
@@ -235,7 +235,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 				svcSpec.Topology = append(svcSpec.Topology, svcTarget)
 			}
 		}
-		glog.V(3).Infof("syncServices: add/update service: %s,\n%v", key, svcSpec)
+		glog.V(3).Infof("syncServices: add/update service: %s", key)
 		lbex.cfgtor.AddOrUpdateService(svcSpec)
 	}
 	return nil
@@ -257,8 +257,7 @@ func (lbex *lbExController) syncEndpoints(obj interface{}) error {
 	}
 	if !exists {
 		glog.V(2).Infof("syncEndpoints: deleting removed endpoint: %v\n", key)
-		// TODO, need a service object here...
-		// lbex.cfgtor.UpdateServiceEndpoints(key, <future thing>)
+		lbex.enqueuServiceObjects([]string{key})
 	} else {
 		topo := lbex.getServiceNetworkTopo(key)
 		if topo == nil || len(topo) == 0 {

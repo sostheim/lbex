@@ -308,9 +308,13 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 }
 
 func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConfig StreamNginxConfig) {
+	glog.V(4).Infof("create StreamNginxConfig for svc: %s, spec: %s", svc.Key, svc)
+
 	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXResolverKey, svc.Service); ok {
 		svcConfig.Resolver = val
 	}
+
+	upstreams := make(map[string]*StreamUpstream)
 
 	for _, target := range svc.Topology {
 		var upstream StreamUpstream
@@ -325,28 +329,40 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 		default:
 			glog.Warningf("hit a switch case DEFAULT <---> %v", svc.UpstreamType)
 		}
-		// Since RR is the default and diretives only over-ride the default,
-		// you *can't* set "roundrobin", or the configuration will be rejected.
-		if svc.Algorithm != "round_robin" {
-			upstream.Algorithm = svc.Algorithm
-		}
-		if upstream.Algorithm == "least_time" {
-			val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
-			upstream.LeastTimeMethod = ValidateMethod(val)
-		}
 
-		svcConfig.Upstreams = append(svcConfig.Upstreams, upstream)
-
-		server := StreamServer{
-			Listen: StreamListen{
-				Port: strconv.Itoa(int(target.ServicePort)),
-				UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
-			},
-			ProxyProtocol:    false,
-			ProxyPassAddress: upstream.Name,
+		elem, exists := upstreams[upstream.Name]
+		if !exists {
+			upstreams[upstream.Name] = &upstream
+			// Since RR is the default and diretives only over-ride the default,
+			// you *can't* set "roundrobin", or the configuration will be rejected.
+			if svc.Algorithm != "round_robin" {
+				upstream.Algorithm = svc.Algorithm
+			}
+			if upstream.Algorithm == "least_time" {
+				val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
+				upstream.LeastTimeMethod = ValidateMethod(val)
+			}
+			server := StreamServer{
+				Listen: StreamListen{
+					Port: strconv.Itoa(int(target.ServicePort)),
+					UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
+				},
+				ProxyProtocol:    false,
+				ProxyPassAddress: upstream.Name,
+			}
+			svcConfig.Servers = append(svcConfig.Servers, server)
+		} else {
+			elem.UpstreamServers = append(elem.UpstreamServers, upstream.UpstreamServers...)
+			upstreams[upstream.Name] = elem
 		}
-		svcConfig.Servers = append(svcConfig.Servers, server)
 	}
+
+	for _, up := range upstreams {
+		svcConfig.Upstreams = append(svcConfig.Upstreams, *up)
+	}
+
+	glog.V(4).Infof("created StreamNginxConfig: %s", svcConfig)
+
 	return
 }
 

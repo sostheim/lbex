@@ -6,9 +6,9 @@
 	
 	{{range $upstream := .Upstreams}}
 	upstream {{$upstream.Name}} {
-		{{if $upstream.Algorithm}}
+		{{- if $upstream.Algorithm}}
 		{{$upstream.Algorithm}}{{if $upstream.LeastTimeMethod}} {{$upstream.LeastTimeMethod}}{{end}};{{end}}
-		{{range $srv := $upstream.UpstreamServers}}
+		{{- range $srv := $upstream.UpstreamServers}}
 		server {{$srv.Address}}{{if $srv.Weight}} weight={{- $srv.Weight}}{{end}}{{if $srv.MaxConns}} max_conns={{- $srv.MaxConns}}{{end}}{{if $srv.MaxFails}} max_fails={{- $srv.MaxFails}}{{end}}{{if $srv.FailTimeout}} fail_timeout={{- $srv.FailTimeout}}{{end}}{{if $srv.Backup}} backup{{end}}{{if $srv.Down}} down{{end}};{{end}}
 	}
 	{{end -}}
