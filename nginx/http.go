@@ -1,9 +1,11 @@
 package nginx
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"text/template"
 
 	"github.com/golang/glog"
@@ -179,4 +181,44 @@ func (ngxc *NginxController) templateHTTP(config HTTPNginxConfig, filename strin
 			glog.Fatalf("failed to write template %v", err)
 		}
 	}
+}
+
+func (h HTTPNginxConfig) String() string {
+	j, err := json.Marshal(h)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(h).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (u Upstream) String() string {
+	j, err := json.Marshal(u)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(u).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (u UpstreamServer) String() string {
+	j, err := json.Marshal(u)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(u).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s Server) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (l Location) String() string {
+	j, err := json.Marshal(l)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(l).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
 }

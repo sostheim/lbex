@@ -1,6 +1,7 @@
 package nginx
 
 import (
+	"encoding/json"
 	"os"
 	"path"
 	"reflect"
@@ -119,4 +120,44 @@ func (ngxc *NginxController) templateStream(config StreamNginxConfig, filename s
 			glog.Fatalf("failed to write template %v", err)
 		}
 	}
+}
+
+func (s StreamNginxConfig) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s StreamUpstream) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s StreamUpstreamServer) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s StreamServer) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s StreamListen) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
 }

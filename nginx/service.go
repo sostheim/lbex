@@ -1,6 +1,9 @@
 package nginx
 
 import (
+	"encoding/json"
+	"reflect"
+
 	"k8s.io/client-go/pkg/api/v1"
 )
 
@@ -163,4 +166,20 @@ func ValidateNodeSet(set string) string {
 		return DefaultNodeSet
 	}
 	return set
+}
+
+func (t Target) String() string {
+	j, err := json.Marshal(t)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(t).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (s ServiceSpec) String() string {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(s).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
 }
