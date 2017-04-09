@@ -9,9 +9,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/sostheim/lbex/annotations"
+	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 const emptyHost = ""
@@ -557,7 +557,7 @@ func createLocation(path string, upstream Upstream, cfg *HTTPContext, websocket 
 	}
 }
 
-func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
+func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backend *v1beta1.IngressBackend, namespace string) Upstream {
 	ups := NewUpstreamWithDefaultServer(name)
 
 	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
@@ -656,7 +656,7 @@ func pathOrDefault(path string) string {
 	return path
 }
 
-func getNameForUpstream(ing *extensions.Ingress, host string, service string) string {
+func getNameForUpstream(ing *v1beta1.Ingress, host string, service string) string {
 	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
 }
 

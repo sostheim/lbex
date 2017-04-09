@@ -37,7 +37,7 @@ type NodeAddress struct {
 }
 
 // ValidateNodeObjectType return wether or not the given object
-// is of type *api.Service or *v1.Service -> valid true, valid false otherwise
+// is of type *api.Node or *v1.Node -> valid true, valid false otherwise
 func ValidateNodeObjectType(obj interface{}) error {
 	switch obj.(type) {
 	case *v1.Node:

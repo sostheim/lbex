@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/client-go/pkg/api/meta"
+	"k8s.io/client-go/pkg/runtime"
 )
 
 // There seems to be no composite interface in the kubernetes api package,
