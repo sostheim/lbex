@@ -15,6 +15,8 @@ import (
 )
 
 const emptyHost = ""
+const udpProto = "udp"
+const singleDefaultPortName = "unnamed"
 
 var (
 	// map node names (key) to Node type
@@ -320,11 +322,11 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 		var upstream StreamUpstream
 		switch svc.UpstreamType {
 		// TODO: Convert these string to consts...
-		case "node":
+		case HostNode:
 			upstream = cfgtor.createNodesStreamUpstream(svc, target)
-		case "pod":
+		case Pod:
 			upstream = cfgtor.createPodStreamUpstream(svc, target)
-		case "cluster-ip":
+		case ClusterIP:
 			upstream = cfgtor.createClusterStreamUpstream(svc, target)
 		default:
 			glog.Warningf("hit a switch case DEFAULT <---> %v", svc.UpstreamType)
@@ -335,17 +337,17 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 			upstreams[upstream.Name] = &upstream
 			// Since RR is the default and diretives only over-ride the default,
 			// you *can't* set "roundrobin", or the configuration will be rejected.
-			if svc.Algorithm != "round_robin" {
+			if svc.Algorithm != RoundRobin {
 				upstream.Algorithm = svc.Algorithm
 			}
-			if upstream.Algorithm == "least_time" {
+			if upstream.Algorithm == LowestLatency {
 				val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
 				upstream.LeastTimeMethod = ValidateMethod(val)
 			}
 			server := StreamServer{
 				Listen: StreamListen{
 					Port: strconv.Itoa(int(target.ServicePort)),
-					UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
+					UDP:  strings.EqualFold(target.Protocol, udpProto),
 				},
 				ProxyProtocol:    false,
 				ProxyPassAddress: upstream.Name,
@@ -607,18 +609,16 @@ func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target 
 
 	glog.V(4).Infof("node set: %s, address type: %s, stream name: %s", set, addressType, su.Name)
 
-	// TODO: Add "n+1"case
-	// TODO: replace string case labels with consts...
 	// TODO: refactor repeated address string creation
 	switch set {
-	case "host":
+	case Host:
 		node, ok := nodes[target.NodeName]
 		if !ok {
 			glog.Warningf("node nodes map entry found for: %s", target.NodeName)
 			break
 		}
 		var address string
-		if addressType == "internal" {
+		if addressType == Internal {
 			address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
 		} else {
 			// else: assumes only other option is "external" - true for now at least...
@@ -629,11 +629,11 @@ func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target 
 
 		serviceUpstreamNodes[spec.Key] = []Node{node}
 
-	case "all":
+	case All:
 		upstreamNodes := []Node{}
 		for _, node := range nodes {
 			var address string
-			if addressType == "internal" {
+			if addressType == Internal {
 				address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
 			} else {
 				address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
@@ -662,7 +662,10 @@ func getNameForUpstream(ing *v1beta1.Ingress, host string, service string) strin
 
 func getNameForStreamUpstream(svc *v1.Service, portName string) string {
 	if portName == "" {
-		portName = "unnamed"
+		// Port name can only be blank/ommitted when there is a single port
+		// defined for a service.  Any service with > 1 ports must provide
+		// names for all ports that compose the services endpoints.
+		portName = singleDefaultPortName
 	}
 	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, portName)
 }

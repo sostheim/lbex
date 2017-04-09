@@ -19,12 +19,16 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/golang/glog"
 	"github.com/sostheim/lbex/annotations"
 
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 )
+
+const noneString = "none"
 
 // Endpoint models all the information needed to target an endpoint.
 type Endpoint struct {
@@ -94,12 +98,15 @@ func (s serviceByName) Less(i, j int) bool {
 func ValidateServiceObject(obj interface{}) bool {
 	err := ValidateServiceObjectType(obj)
 	if err != nil {
+		glog.V(4).Infof("can't validate service object type, err: " + err.Error())
 		return false
 	}
 	if !IsValidServiceType(obj) {
+		glog.V(4).Infof("can't validate based on service type")
 		return false
 	}
 	if !annotations.IsValid(obj) {
+		glog.V(4).Infof("can't validate based on annotations")
 		return false
 	}
 	return true
@@ -196,13 +203,14 @@ func ServiceTypeHeadless(obj interface{}) bool {
 	if err != nil {
 		return false
 	}
-	return clusterIP == "None"
+	return strings.EqualFold(clusterIP, noneString)
 }
 
 // IsValidServiceType returns true iff service properties are suche that
 // external load balancing is appropriate
 func IsValidServiceType(obj interface{}) bool {
-	if !ServiceTypeHeadless(obj) && (ServiceTypeNodePort(obj) || ServiceTypeLoadBalancer(obj)) {
+	if !ServiceTypeHeadless(obj) &&
+		(ServiceTypeNodePort(obj) || ServiceTypeClusterIP(obj) || ServiceTypeLoadBalancer(obj)) {
 		return true
 	}
 	return false
