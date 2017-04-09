@@ -1,5 +1,10 @@
 package nginx
 
+import (
+	"encoding/json"
+	"reflect"
+)
+
 // HTTPContext holds NGINX configuration parameters for an 'http' context
 type HTTPContext struct {
 	// Context: http directives
@@ -49,4 +54,12 @@ func NewDefaultHTTPContext() *HTTPContext {
 		ProxyBuffering:             true,
 		HSTSMaxAge:                 2592000,
 	}
+}
+
+func (h HTTPContext) String() string {
+	j, err := json.Marshal(h)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(h).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
 }

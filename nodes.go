@@ -88,16 +88,36 @@ func nodeDeletedFunc(lbex *lbExController) func(obj interface{}) {
 		lbex.nodesQueue.Enqueue(obj)
 	}
 }
+
+func nodeUpdateEqual(old, new *v1.Node) bool {
+	// Things we dont care about:
+	// Data that should be static for a given node:
+	// - node.metadata.creationtimestamp
+	// - node.metadata.name
+	// - node.metadata.selflink
+	// - node.metadata.resourceversion
+	// - node.metadata.UID
+	// - node.status.allocateable
+	// - node.status.capacity
+	// - node.status.nodeinfo
+	// Data that varies freqently, but doesn't affect our ability to use the node:
+	// - node.status.conditions <--- constantly changing timestamps for health checks
+	// - node.status.images <--- chanes every time a new image is pulled
+
+	return reflect.DeepEqual(old.GetAnnotations(), new.GetAnnotations()) &&
+		reflect.DeepEqual(old.GetLabels(), new.GetLabels()) &&
+		reflect.DeepEqual(old.Spec, new.Spec) &&
+		reflect.DeepEqual(old.Status.Addresses, new.Status.Addresses) &&
+		reflect.DeepEqual(old.Status.DaemonEndpoints, new.Status.DaemonEndpoints)
+}
+
 func nodeUpdatedFunc(lbex *lbExController) func(obj, newObj interface{}) {
 	return func(obj, newObj interface{}) {
-		if filterNode(obj) {
+		if filterNode(obj) || filterNode(newObj) {
 			glog.V(5).Infof("UpdateFunc: filtering out node object")
 			return
 		}
-		// TODO: Replace DeepEqual with a comparison that ignores the
-		//       status.condition fields (specifically the timestamps).
-		//       Would also be more peformant than reflect.
-		if !reflect.DeepEqual(obj, newObj) {
+		if !nodeUpdateEqual(obj.(*v1.Node), newObj.(*v1.Node)) {
 			glog.V(5).Infof("UpdateFunc: enqueuing unequal node object")
 			lbex.nodesQueue.Enqueue(newObj)
 		}

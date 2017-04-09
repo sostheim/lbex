@@ -2,10 +2,12 @@ package nginx
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"text/template"
 
 	"github.com/golang/glog"
@@ -203,4 +205,28 @@ func (ngxc *NginxController) UpdateMainConfigFile() {
 	}
 
 	glog.V(3).Infof("The main NGINX configuration file had been updated")
+}
+
+func (n NginxMainConfig) String() string {
+	j, err := json.Marshal(n)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(n).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (n NginxMainEventConfig) String() string {
+	j, err := json.Marshal(n)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(n).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
+}
+
+func (n NginxMainHTTPConfig) String() string {
+	j, err := json.Marshal(n)
+	if err != nil {
+		return string("cant't marshal: " + reflect.TypeOf(n).String() + ", to json string, err: " + err.Error())
+	}
+	return string(j)
 }

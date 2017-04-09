@@ -9,9 +9,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/sostheim/lbex/annotations"
+	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 const emptyHost = ""
@@ -308,9 +308,13 @@ func (cfgtor *Configurator) generateNginxIngressCfg(ingEx *IngressEx, pems map[s
 }
 
 func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConfig StreamNginxConfig) {
+	glog.V(4).Infof("create StreamNginxConfig for svc: %s, spec: %s", svc.Key, svc)
+
 	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXResolverKey, svc.Service); ok {
 		svcConfig.Resolver = val
 	}
+
+	upstreams := make(map[string]*StreamUpstream)
 
 	for _, target := range svc.Topology {
 		var upstream StreamUpstream
@@ -325,28 +329,40 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 		default:
 			glog.Warningf("hit a switch case DEFAULT <---> %v", svc.UpstreamType)
 		}
-		// Since RR is the default and diretives only over-ride the default,
-		// you *can't* set "roundrobin", or the configuration will be rejected.
-		if svc.Algorithm != "round_robin" {
-			upstream.Algorithm = svc.Algorithm
-		}
-		if upstream.Algorithm == "least_time" {
-			val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
-			upstream.LeastTimeMethod = ValidateMethod(val)
-		}
 
-		svcConfig.Upstreams = append(svcConfig.Upstreams, upstream)
-
-		server := StreamServer{
-			Listen: StreamListen{
-				Port: strconv.Itoa(int(target.ServicePort)),
-				UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
-			},
-			ProxyProtocol:    false,
-			ProxyPassAddress: upstream.Name,
+		elem, exists := upstreams[upstream.Name]
+		if !exists {
+			upstreams[upstream.Name] = &upstream
+			// Since RR is the default and diretives only over-ride the default,
+			// you *can't* set "roundrobin", or the configuration will be rejected.
+			if svc.Algorithm != "round_robin" {
+				upstream.Algorithm = svc.Algorithm
+			}
+			if upstream.Algorithm == "least_time" {
+				val, _ := annotations.GetOptionalStringAnnotation(annotations.LBEXMethodKey, svc.Service)
+				upstream.LeastTimeMethod = ValidateMethod(val)
+			}
+			server := StreamServer{
+				Listen: StreamListen{
+					Port: strconv.Itoa(int(target.ServicePort)),
+					UDP:  (target.Protocol == "upd" || target.Protocol == "UDP"),
+				},
+				ProxyProtocol:    false,
+				ProxyPassAddress: upstream.Name,
+			}
+			svcConfig.Servers = append(svcConfig.Servers, server)
+		} else {
+			elem.UpstreamServers = append(elem.UpstreamServers, upstream.UpstreamServers...)
+			upstreams[upstream.Name] = elem
 		}
-		svcConfig.Servers = append(svcConfig.Servers, server)
 	}
+
+	for _, up := range upstreams {
+		svcConfig.Upstreams = append(svcConfig.Upstreams, *up)
+	}
+
+	glog.V(4).Infof("created StreamNginxConfig: %s", svcConfig)
+
 	return
 }
 
@@ -541,7 +557,7 @@ func createLocation(path string, upstream Upstream, cfg *HTTPContext, websocket 
 	}
 }
 
-func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
+func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backend *v1beta1.IngressBackend, namespace string) Upstream {
 	ups := NewUpstreamWithDefaultServer(name)
 
 	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
@@ -640,7 +656,7 @@ func pathOrDefault(path string) string {
 	return path
 }
 
-func getNameForUpstream(ing *extensions.Ingress, host string, service string) string {
+func getNameForUpstream(ing *v1beta1.Ingress, host string, service string) string {
 	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
 }
 

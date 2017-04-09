@@ -17,10 +17,11 @@ limitations under the License.
 package annotations
 
 import (
+	"errors"
+	"reflect"
 	"strconv"
 
 	"github.com/golang/glog"
-	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 )
 
@@ -88,54 +89,23 @@ func (as serviceAnnotations) parseInt(name string) (int, error) {
 	return 0, ErrMissingAnnotations
 }
 
-func checkAnnotationAPI(name string, service *api.Service) error {
-	if service == nil || len(service.GetAnnotations()) == 0 {
-		return ErrMissingAnnotations
-	}
-	if name == "" {
-		return ErrInvalidAnnotationName
-	}
-	return nil
-}
-
-func checkAnnotationV1(name string, service *v1.Service) error {
-	if service == nil || len(service.GetAnnotations()) == 0 {
-		return ErrMissingAnnotations
-	}
-	if name == "" {
-		return ErrInvalidAnnotationName
-	}
-	return nil
-}
-
 func checkAnnotation(name string, obj interface{}) error {
 	if name == "" {
 		return ErrInvalidAnnotationName
 	}
 	switch t := obj.(type) {
 	default:
-		glog.V(3).Infof("unexpected type assertion value: %T\n", t)
+		return errors.New("unexpected type value: " + reflect.TypeOf(t).String())
 	case *v1.Service:
-		service := obj.(*v1.Service)
-		if len(service.GetAnnotations()) == 0 {
-			return ErrMissingAnnotations
+		service, ok := obj.(*v1.Service)
+		if !ok {
+			return errors.New("type assertion failure")
 		}
-	case *api.Service:
-		service := obj.(*api.Service)
 		if len(service.GetAnnotations()) == 0 {
 			return ErrMissingAnnotations
 		}
 	}
 	return nil
-}
-
-// GetBoolAnnotationAPI extracts a boolean from an api.Service annotation
-func GetBoolAnnotationAPI(name string, service *api.Service) (bool, error) {
-	err := checkAnnotation(name, service)
-	if err != nil {
-		return false, err
-	}
-	return serviceAnnotations(service.GetAnnotations()).parseBool(name)
 }
 
 // GetBoolAnnotation extracts a boolean from an annotation or returns an error
@@ -144,15 +114,7 @@ func GetBoolAnnotation(name string, obj interface{}) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	switch obj.(type) {
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseBool(name)
-	case *api.Service:
-		service := obj.(*api.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseBool(name)
-	}
-	return false, ErrMissingAnnotations
+	return serviceAnnotations(obj.(*v1.Service).GetAnnotations()).parseBool(name)
 }
 
 // GetOptionalBoolAnnotation returns the boolean value of the annotations, or
@@ -173,15 +135,7 @@ func GetStringAnnotation(name string, obj interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	switch obj.(type) {
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseString(name)
-	case *api.Service:
-		service := obj.(*api.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseString(name)
-	}
-	return "", ErrMissingAnnotations
+	return serviceAnnotations(obj.(*v1.Service).GetAnnotations()).parseString(name)
 }
 
 // GetOptionalStringAnnotation returns the string value of the annotations, or
@@ -202,15 +156,7 @@ func GetIntAnnotation(name string, obj interface{}) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	switch obj.(type) {
-	case *v1.Service:
-		service := obj.(*v1.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseInt(name)
-	case *api.Service:
-		service := obj.(*api.Service)
-		return serviceAnnotations(service.GetAnnotations()).parseInt(name)
-	}
-	return 0, ErrMissingAnnotations
+	return serviceAnnotations(obj.(*v1.Service).GetAnnotations()).parseInt(name)
 }
 
 // GetOptionalIntAnnotation returns the integer value of the annotations, or
