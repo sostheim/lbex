@@ -22,16 +22,15 @@ var (
 	// map node names (key) to Node type
 	nodes = make(map[string]Node)
 
-	// Why isn't this a map of []inerface{} types, so we can just insert either
-	// Nodes are Targest against the same key?  For example:
-	//    -> serviceUpstreams = make(map[string][]interface{})
-	// See this disucssion: https://github.com/golang/go/wiki/InterfaceSlice
-
 	// map service key to nodes that populate the services upstream
 	serviceUpstreamNodes = make(map[string][]Node)
 
 	// map service key to the target that populate the services upstream
-	serviceUpstreamTarget = make(map[string]Target)
+	serviceUpstreamTarget = make(map[string][]Target)
+
+	// Why aren't these two maps combined in to a map of []inerface{} types
+	// so we can just insert either Nodes or Targets against the same key?
+	// See this disucssion: https://github.com/golang/go/wiki/InterfaceSlice
 )
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
@@ -321,7 +320,6 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 	for _, target := range svc.Topology {
 		var upstream StreamUpstream
 		switch svc.UpstreamType {
-		// TODO: Convert these string to consts...
 		case HostNode:
 			upstream = cfgtor.createNodesStreamUpstream(svc, target)
 		case Pod:
@@ -577,20 +575,18 @@ func (cfgtor *Configurator) createUpstream(ingEx *IngressEx, name string, backen
 }
 
 func (cfgtor *Configurator) createClusterStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
-	serviceUpstreamTarget[spec.Key] = target
-	name := getNameForStreamUpstream(spec.Service, target.PortName)
+	serviceUpstreamTarget[spec.Key] = append(serviceUpstreamTarget[spec.Key], target)
 	return StreamUpstream{
-		Name: name,
+		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 		UpstreamServers: []StreamUpstreamServer{
 			StreamUpstreamServer{Address: spec.ClusterIP + ":" + strconv.Itoa(target.ServicePort)}},
 	}
 }
 
 func (cfgtor *Configurator) createPodStreamUpstream(spec *ServiceSpec, target Target) StreamUpstream {
-	serviceUpstreamTarget[spec.Key] = target
-	name := getNameForStreamUpstream(spec.Service, target.PortName)
+	serviceUpstreamTarget[spec.Key] = append(serviceUpstreamTarget[spec.Key], target)
 	return StreamUpstream{
-		Name: name,
+		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 		UpstreamServers: []StreamUpstreamServer{
 			StreamUpstreamServer{Address: target.PodIP + ":" + strconv.Itoa(target.PodPort)}},
 	}
@@ -606,47 +602,43 @@ func (cfgtor *Configurator) createNodesStreamUpstream(spec *ServiceSpec, target 
 	su := StreamUpstream{
 		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 	}
-
 	glog.V(4).Infof("node set: %s, address type: %s, stream name: %s", set, addressType, su.Name)
 
-	// TODO: refactor repeated address string creation
 	switch set {
 	case Host:
 		node, ok := nodes[target.NodeName]
 		if !ok {
-			glog.Warningf("node nodes map entry found for: %s", target.NodeName)
+			glog.Warningf("no nodes map entry found for: %s", target.NodeName)
 			break
 		}
-		var address string
-		if addressType == Internal {
-			address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
-		} else {
-			// else: assumes only other option is "external" - true for now at least...
-			address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
-		}
-		glog.V(4).Infof("upstream server address: %s", address)
-		su.UpstreamServers = append(su.UpstreamServers, StreamUpstreamServer{Address: address})
-
+		su.UpstreamServers = append(su.UpstreamServers,
+			StreamUpstreamServer{Address: formatAddress(addressType, &node, &target)})
 		serviceUpstreamNodes[spec.Key] = []Node{node}
 
 	case All:
 		upstreamNodes := []Node{}
 		for _, node := range nodes {
-			var address string
-			if addressType == Internal {
-				address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
-			} else {
-				address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
-			}
-			glog.V(4).Infof("adding upstream server address: %s", address)
-			su.UpstreamServers = append(su.UpstreamServers, StreamUpstreamServer{Address: address})
+			su.UpstreamServers = append(su.UpstreamServers,
+				StreamUpstreamServer{Address: formatAddress(addressType, &node, &target)})
 			upstreamNodes = append(upstreamNodes, node)
 		}
 		serviceUpstreamNodes[spec.Key] = upstreamNodes
+
 	default:
 		glog.Warningf("hit a switch case DEFAULT <---> %s", set)
 	}
 	return su
+}
+
+func formatAddress(addrType string, node *Node, target *Target) string {
+	var address string
+	if addrType == Internal {
+		address = node.InternalIP + ":" + strconv.Itoa(target.NodePort)
+	} else {
+		address = node.ExternalIP + ":" + strconv.Itoa(target.NodePort)
+	}
+	glog.V(4).Infof("formatted address: %s", address)
+	return address
 }
 
 func pathOrDefault(path string) string {
