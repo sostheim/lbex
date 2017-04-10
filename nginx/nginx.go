@@ -13,6 +13,8 @@ import (
 	"github.com/golang/glog"
 )
 
+const mainConfFilename = "/etc/nginx/nginx.conf"
+
 // Configuration Type for NGINX Server
 type Configuration uint8
 
@@ -186,16 +188,15 @@ func (ngxc *NginxController) UpdateMainConfigFile() {
 		glog.Fatalf("Failed to parse the main config template file: %v", err)
 	}
 
-	filename := "/etc/nginx/nginx.conf"
 	if glog.V(2) {
-		glog.Infof("Writing NGINX conf to %v", filename)
+		glog.Infof("Writing NGINX conf to %v", mainConfFilename)
 		tmpl.Execute(os.Stdout, ngxc.mainCfg)
 	}
 
 	if ngxc.cfgType != LocalCfg {
-		w, err := os.Create(filename)
+		w, err := os.Create(mainConfFilename)
 		if err != nil {
-			glog.Fatalf("Failed to open %v: %v", filename, err)
+			glog.Fatalf("Failed to open %v: %v", mainConfFilename, err)
 		}
 		defer w.Close()
 

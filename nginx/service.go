@@ -7,54 +7,107 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
-var (
-	// SupportedAlgorithms - NGINX load balanacing upstream directives
-	SupportedAlgorithms = []string{
-		"round_robin", // *set as default below* direct traffic sequentially to the servers.
-		"least_conn",  // selects the server with the smaller number of current active connections.
-		"least_time",  // selects the server with the lowest average latency and the least number of active connections.
-	}
+// SupportedAlgorithms - NGINX load balanacing upstream directives
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#upstream
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_conn
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time
+var SupportedAlgorithms = []string{
+	RoundRobin,
+	LeastConnections,
+	LowestLatency,
+}
+
+const (
+	// RoundRobin - direct traffic sequentially to the servers, default algorithm
+	RoundRobin string = "round_robin"
+	// LeastConnections - direct traffic to the server with the smaller number of current active connections.
+	LeastConnections string = "least_conn"
+	// LowestLatency - direct traffic to server with the lowest average latency and the least number of active connections.
+	LowestLatency string = "least_time"
 	// DefaultAlgorithm - round robin
-	DefaultAlgorithm = SupportedAlgorithms[0]
+	DefaultAlgorithm string = RoundRobin
+)
 
-	// SupportedMethods - for NGINX load balanacing upstream directives leasttime:
-	// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time
-	SupportedMethods = []string{
-		"connect", // *set as default value below*
-		"first_byte",
-		"last_byte",
-		"connect inflight",
-		"first_byte inflight",
-		"last_byte inflight",
-	}
-	//DefaultMethod - connect
-	DefaultMethod = SupportedMethods[0]
+// SupportedMethods - for NGINX load balanacing upstream directives leasttime:
+// http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time
+var SupportedMethods = []string{
+	Connect,
+	FirstByte,
+	LastByte,
+	ConnectInflight,
+	FirstByteInflight,
+	LastByteInflight,
+}
 
-	// UpstreamTypes - service upstream pool target types
-	UpstreamTypes = []string{
-		"node", // *set as default value below*
-		"pod",
-		"cluster-ip",
-	}
+const (
+	// Connect - time to connect to the upstream server is the latency measured, default method
+	Connect string = "connect"
+	// FirstByte - time to receive the first byte of data is the latency measured
+	FirstByte string = "first_byte"
+	// LastByte - time to receive the last byte of data is the latency measured
+	LastByte string = "last_byte"
+	// ConnectInflight - Connect timing but includes incomplete connections
+	ConnectInflight string = "connect inflight"
+	// FirstByteInflight - FirstByte timing but includes incomplete connections
+	FirstByteInflight string = "first_byte inflight"
+	// LastByteInflight - LastByte timing but includes incomplete connections
+	LastByteInflight string = "last_byte inflight"
+	// DefaultMethod - connect
+	DefaultMethod string = Connect
+)
+
+// UpstreamTypes - service upstream pool target types
+// If you're bored and need some intertaining reading about 'node' as a name:
+// - https://github.com/kubernetes/kubernetes/issues/1111
+var UpstreamTypes = []string{
+	HostNode,
+	Pod,
+	ClusterIP,
+}
+
+const (
+	// HostNode - upstream endpoints are the host node addresses:ports, default upstream type
+	HostNode string = "node"
+	// Pod -  upstream endpoints are pod addresses:ports
+	Pod string = "pod"
+	// ClusterIP -  upstream endpoints are cluster IP addresses:ports
+	ClusterIP string = "cluster-ip"
 	// DefaultUpstreamType - default service upstream pool target type
-	DefaultUpstreamType = UpstreamTypes[0]
+	DefaultUpstreamType string = HostNode
+)
 
-	// NodeSelectionSets - node set selection
-	NodeSelectionSets = []string{
-		"host", // *set as default value below*
-		// "n+1", --> TODO: add n+1 case suuport
-		"all",
-	}
+// NodeSelectionSets - node set selection
+var NodeSelectionSets = []string{
+	Host,
+	All,
+}
+
+const (
+	// Host - Upstream group is selected from only nodes that host the service's pod(s), default set
+	Host string = "host"
+	// NPlus1 - TODO: Upstream group is selected from the nodes that host the service's pod(s) + 1 spare
+	NPlus1 string = "n+1"
+	// Fixed - TODO: Upstream group is at most 'fixed' nodes where: hosts < n+1 < fixed < all
+	Fixed string = "fixed"
+	// All - Upstream group is made up of all nodes in the cluster
+	All string = "all"
 	// DefaultNodeSet - default node set
-	DefaultNodeSet = NodeSelectionSets[0]
+	DefaultNodeSet = Host
+)
 
-	// NodeAddressType - node IP address type
-	NodeAddressType = []string{
-		"internal", // *set as default value below*
-		"external",
-	}
+// NodeAddressType - node IP address type
+var NodeAddressType = []string{
+	Internal,
+	External,
+}
+
+const (
+	// Internal - upstream nodes IP address type is internal (assumed RFC1918), default type
+	Internal string = "internal"
+	// External - upstream nodes IP address type is external public or private
+	External string = "external"
 	// DefaultNodeAddressType - default address type
-	DefaultNodeAddressType = NodeAddressType[0]
+	DefaultNodeAddressType = External
 )
 
 // Target is a service network topology target
