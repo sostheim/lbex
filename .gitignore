@@ -3,5 +3,4 @@
 *.tgz
 .env/
 *~
-lbex
-osx-lbex
+**/build

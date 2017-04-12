@@ -33,6 +33,6 @@ RUN rm /etc/nginx/conf.d/*
 RUN apt update
 RUN apt install netcat-openbsd net-tools iproute2 -y
 
-COPY lbex nginx/http.tmpl nginx/stream.tmpl nginx/nginx.conf.tmpl /
+COPY build/linux_amd64/lbex nginx/http.tmpl nginx/stream.tmpl nginx/nginx.conf.tmpl /
 
 ENTRYPOINT ["/lbex"]

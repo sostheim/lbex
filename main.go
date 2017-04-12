@@ -18,8 +18,10 @@ package main
 
 import (
 	goflag "flag"
+	"fmt"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/golang/glog"
 	flag "github.com/spf13/pflag"
 
@@ -30,10 +32,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var LbexMajorMinorPatch string
+var LbexType = "alpha"
+var LbexGitCommit string
+
 var (
 	kubeconfig  = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	proxy       = flag.String("proxy", "", "kubctl proxy server running at the given url")
-	serviceName = flag.String("service-name", "", `Proive LoadBalancing for the specified service.`)
+	serviceName = flag.String("service-name", "", "Provide LoadBalancing for the specified service.")
+	version     = flag.Bool("version", false, "Display version info")
 )
 
 func init() {
@@ -72,10 +79,23 @@ func byProxy() *rest.Config {
 	}
 }
 
+func displayVersion() {
+	semVer, err := semver.Make(LbexMajorMinorPatch + "-" + LbexType + "+git.sha." + LbexGitCommit)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(semVer.String())
+}
+
 func main() {
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 
+	// check for version flag, if present print veriosn and exit
+	if version {
+		displayVersion()
+		return
+	}
 	// creates the config, in preference order, for:
 	// 1 - the proxy URL, if present as an argument
 	// 2 - kubeconfig, if present as an arguemtn
