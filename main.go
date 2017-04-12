@@ -92,7 +92,7 @@ func main() {
 	flag.Parse()
 
 	// check for version flag, if present print veriosn and exit
-	if version {
+	if *version {
 		displayVersion()
 		return
 	}

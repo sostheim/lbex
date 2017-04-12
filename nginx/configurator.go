@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/sostheim/lbex/annotations"
+	"github.com/samsung-cnct/lbex/annotations"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"

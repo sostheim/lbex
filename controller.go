@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/sostheim/lbex/annotations"
-	"github.com/sostheim/lbex/nginx"
+	"github.com/samsung-cnct/lbex/annotations"
+	"github.com/samsung-cnct/lbex/nginx"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
