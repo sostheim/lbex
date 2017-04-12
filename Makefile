@@ -39,8 +39,14 @@ dist: compile
 		echo $$f; \
 	done
 
-container: compile
-	docker build --rm --pull --tag $(PREFIX):latest .
+container:
+	@$(GODEP) gox -ldflags "-X main.LbexMajorMinorPatch=$(VERSION) \
+									-X main.LbexType=$(TYPE) \
+									-X main.LbexGitCommit=$(COMMIT) -w" \
+	-osarch="linux/amd64" \
+	-output "build/{{.OS}}_{{.Arch}}/$(NAME)" \
+	./...
+	docker build --rm --pull --tag $(IMAGE):latest .
 
 tag: container
 	docker tag $(IMAGE):latest $(IMAGE):$(COMMIT)

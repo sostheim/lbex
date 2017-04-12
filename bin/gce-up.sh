@@ -54,7 +54,7 @@ gcloud compute networks create \
   --project=${LBEX_PROJECT}
 
 gcloud compute networks subnets create \
-  {LBEX_BASE_NAME}-subnetwork \
+  ${LBEX_BASE_NAME}-subnetwork \
   --description="Sub-network for ${LBEX_BASE_NAME}-LBEX instances" \
   --network="${LBEX_BASE_NAME}-network" \
   --range=${LBEX_CIDR} \
@@ -71,6 +71,7 @@ gcloud compute firewall-rules create \
 
 
 # create a string of '-p port:port' pairs for docker port publishing
+DOCKER_PORTS=""
 for i in ${LBEX_PORTS//,/ }
 do
   port_array=(${i//// })
@@ -85,7 +86,7 @@ done
 
 # create 'templated' cloud init for the instance template
 TEMPDIR=$(mktemp -d "${TMPDIR:-/tmp/}$(basename 0).XXXXXXXXXXXX")
-cat "${TEMPDIR}/cloud-init" > /dev/null <<EOF
+cat << EOF > "${TEMPDIR}/cloud-init"
 #cloud-config
 write_files:
 - path: /etc/systemd/system/lbex.service
@@ -142,18 +143,18 @@ write_files:
     # fd 3 is what systemd gave us
 
     while true ; do
-       sed -e 's/\r$//' | IFS=":" read header line <&3
-       [ "$header" == "Host" ] && host="$header:$line"
-       [ -z "$header" ] && break
+       sed -e 's/\r\$//' | IFS=":" read header line <&3
+       [ "\$header" == "Host" ] && host="\$header:\$line"
+       [ -z "\$header" ] && break
     done
 
-    RUNNING=$(docker inspect --format="{{.State.Running}}" lbex 2> /dev/null)
+    RUNNING=\$(docker inspect --format="{{.State.Running}}" lbex 2> /dev/null)
 
-    if [ $? -eq 1 ]; then
+    if [ \$? -eq 1 ]; then
       cat >&3 <<EOF
     HTTP/1.0 404 Not Found
     EOF
-    elif [ "$RUNNING" == "false" ]; then
+    elif [ "\$RUNNING" == "false" ]; then
       cat >&3 <<EOF
     HTTP/1.0 404 Not Found
     EOF
@@ -166,10 +167,10 @@ write_files:
     cat >&3 <<EOF
     Content-Type: text/html
     Content-Length: 43
-    Date: $(date -R)
+    Date: \$(date -R)
     EOF
 
-    [ -n "$host" ] && echo $host | cat >&3
+    [ -n "\$host" ] && echo \$host | cat >&3
 
     cat >&3 <<EOF
     <html>
@@ -221,7 +222,7 @@ gcloud compute instance-groups managed set-autoscaling \
   --project=${LBEX_PROJECT}
 
 # create a healthcheck and set autohealing
-gcloud compute health-checks create http \
+gcloud compute http-health-checks create \
   ${LBEX_BASE_NAME}-healthcheck \
   --description="${LBEX_BASE_NAME} health checker" \
   --check-interval=5s \
@@ -233,7 +234,6 @@ gcloud compute health-checks create http \
 
 gcloud beta compute instance-groups managed set-autohealing \
   ${LBEX_BASE_NAME}-instance-group \
-  --description="${LBEX_BASE_NAME}-instance-group autohealer" \
   --initial-delay=180 \
   --http-health-check=${LBEX_BASE_NAME}-healthcheck \
   --region=${LBEX_REGION} \

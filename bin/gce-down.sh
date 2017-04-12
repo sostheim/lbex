@@ -20,30 +20,30 @@ fi
 gcloud compute instance-groups managed delete \
   ${LBEX_BASE_NAME}-instance-group \
   --region=${LBEX_REGION} \
-  --project=${LBEX_PROJECT}
+  --project=${LBEX_PROJECT} --quiet || true
 
 # delete the healthcheck
-gcloud compute health-checks delete \
+gcloud compute http-health-checks delete \
   ${LBEX_BASE_NAME}-healthcheck \
-  --project=${LBEX_PROJECT}
+  --project=${LBEX_PROJECT} --quiet || true
 
 # delete the instance template
 gcloud compute instance-templates delete \
   ${LBEX_BASE_NAME}-instance \
-  --project=${LBEX_PROJECT}
-
-# delete the subnet and network
-gcloud compute networks subnets delete \
-  {LBEX_BASE_NAME}-subnetwork \
-  --region=${LBEX_REGION} \
-  --project=${LBEX_PROJECT}
-
-gcloud compute networks delete \
-  ${LBEX_BASE_NAME}-network \
-  --project=${LBEX_PROJECT}
+  --project=${LBEX_PROJECT} --quiet || true
 
 # delete all-firewall rule
 gcloud compute firewall-rules delete \
   ${LBEX_BASE_NAME}-all-traffic \
-  --project=${LBEX_PROJECT}
+  --project=${LBEX_PROJECT} --quiet || true
+
+# delete the subnet and network
+gcloud compute networks subnets delete \
+  ${LBEX_BASE_NAME}-subnetwork \
+  --region=${LBEX_REGION} \
+  --project=${LBEX_PROJECT} --quiet || true
+
+gcloud compute networks delete \
+  ${LBEX_BASE_NAME}-network \
+  --project=${LBEX_PROJECT} --quiet || true
 
