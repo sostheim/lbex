@@ -3,5 +3,6 @@
 *.tgz
 .env/
 *~
+**/build
+**/dist
 lbex
-osx-lbex
