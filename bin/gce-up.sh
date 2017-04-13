@@ -41,10 +41,10 @@ if [ -z "${LBEX_MAX_AUTOSCALE+x}" ]; then
   inf "Using '${LBEX_MAX_AUTOSCALE}' as max number of LBEX instances"
 fi
 
-if [ -z "${LBEX_HEALTH_PORT+x}" ]; then
-  LBEX_HEALTH_PORT=7331
-  inf "Using '${LBEX_HEALTH_PORT}' as health check port"
-fi
+#if [ -z "${LBEX_HEALTH_PORT+x}" ]; then
+#  LBEX_HEALTH_PORT=7331
+#  inf "Using '${LBEX_HEALTH_PORT}' as health check port"
+#fi
 
 # create a custom network and subnet
 gcloud compute networks create \
@@ -98,91 +98,16 @@ write_files:
     After=status.service
 
     [Service]
+    Environment=USER=root
+    Restart=always
     ExecStartPre=/bin/mkdir -p /var/kubeconfig
     ExecStartPre=/usr/bin/toolbox /google-cloud-sdk/bin/gcloud components install kubectl -q
     ExecStartPre=/usr/bin/toolbox --bind=/var/kubeconfig:/root/.kube /google-cloud-sdk/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
     ExecStart=/usr/bin/docker run --rm --name=lbex --volume /var/kubeconfig:/kubeconfig ${DOCKER_PORTS} quay.io/samsung_cnct/lbex:latest --kubeconfig /kubeconfig/config
     ExecStop=/usr/bin/docker stop lbex
     ExecStopPost=/usr/bin/docker rm lbex
-- path: /etc/systemd/system/status.socket
-  permissions: 0644
-  owner: root
-  content: |
-    [Unit]
-    Description=Monitor Socket
-
-    [Socket]
-    ListenStream=${LBEX_HEALTH_PORT}
-    Backlog=1
-    MaxConnections=10
-    Accept=yes
-
-    [Install]
-    WantedBy=sockets.target
-- path: /etc/systemd/system/status.service
-  permissions: 0644
-  owner: root
-  content: |
-    [Unit]
-    Description=monitor service
-    Requires=status.socket
-    After=syslog.target network.target 
-
-    [Service]
-    Type=forking
-    ExecStart=/var/status.sh
-
-    [Install]
-    WantedBy=multi-user.target
-    Also=status.socket
-- path: /var/status.sh
-  permissions: 0744
-  owner: root
-  content: |
-    #!/bin/sh
-    # fd 3 is what systemd gave us
-
-    while true ; do
-       sed -e 's/\r\$//' | IFS=":" read header line <&3
-       [ "\$header" == "Host" ] && host="\$header:\$line"
-       [ -z "\$header" ] && break
-    done
-
-    RUNNING=\$(docker inspect --format="{{.State.Running}}" lbex 2> /dev/null)
-
-    if [ \$? -eq 1 ]; then
-      cat >&3 <<EOF
-    HTTP/1.0 404 Not Found
-    EOF
-    elif [ "\$RUNNING" == "false" ]; then
-      cat >&3 <<EOF
-    HTTP/1.0 404 Not Found
-    EOF
-    else
-      cat >&3 <<EOF
-    HTTP/1.0 200 OK
-    EOF       
-    fi
-
-    cat >&3 <<EOF
-    Content-Type: text/html
-    Content-Length: 43
-    Date: \$(date -R)
-    EOF
-
-    [ -n "\$host" ] && echo \$host | cat >&3
-
-    cat >&3 <<EOF
-    <html>
-    <body>
-    <h1>LBEX</h1>
-    </html>
-    </body>
-    EOF
-
 runcmd:
 - systemctl daemon-reload
-- systemctl start status.service
 - systemctl start lbex.service
 EOF
 
@@ -222,20 +147,20 @@ gcloud compute instance-groups managed set-autoscaling \
   --project=${LBEX_PROJECT}
 
 # create a healthcheck and set autohealing
-gcloud compute http-health-checks create \
-  ${LBEX_BASE_NAME}-healthcheck \
-  --description="${LBEX_BASE_NAME} health checker" \
-  --check-interval=5s \
-  --healthy-threshold=2 \
-  --port=${LBEX_HEALTH_PORT} \
-  --timeout=5s \
-  --unhealthy-threshold=2 \
-  --project=${LBEX_PROJECT}
+#gcloud compute http-health-checks create \
+#  ${LBEX_BASE_NAME}-healthcheck \
+#  --description="${LBEX_BASE_NAME} health checker" \
+#  --check-interval=5s \
+#  --healthy-threshold=2 \
+#  --port=${LBEX_HEALTH_PORT} \
+#  --timeout=5s \
+#  --unhealthy-threshold=2 \
+#  --project=${LBEX_PROJECT}
 
-gcloud beta compute instance-groups managed set-autohealing \
-  ${LBEX_BASE_NAME}-instance-group \
-  --initial-delay=180 \
-  --http-health-check=${LBEX_BASE_NAME}-healthcheck \
-  --region=${LBEX_REGION} \
-  --project=${LBEX_PROJECT}
+#gcloud beta compute instance-groups managed set-autohealing \
+#  ${LBEX_BASE_NAME}-instance-group \
+#  --initial-delay=180 \
+#  --http-health-check=${LBEX_BASE_NAME}-healthcheck \
+#  --region=${LBEX_REGION} \
+#  --project=${LBEX_PROJECT}
 

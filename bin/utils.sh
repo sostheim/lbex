@@ -75,10 +75,10 @@ case $key in
   LBEX_PORTS="$2"
   shift
   ;;
-  -e|--health-port)
-  LBEX_HEALTH_PORT="$2"
-  shift
-  ;;
+  #-e|--health-port)
+  #LBEX_HEALTH_PORT="$2"
+  #shift
+  #;;
   -h|--help)
   LBEX_HELP=true
   ;;
