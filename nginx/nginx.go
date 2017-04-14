@@ -87,7 +87,7 @@ type NginxMainHTTPConfig struct {
 }
 
 // NewNginxController creates a NGINX controller
-func NewNginxController(cfgType Configuration, nginxConfPath string, healthStatus bool) (*NginxController, error) {
+func NewNginxController(cfgType Configuration, nginxConfPath string, healthCheck bool) (*NginxController, error) {
 	ngxc := NginxController{
 		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
 		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
@@ -113,12 +113,13 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, healthStatu
 		case StreamCfg:
 			cfg.DefaultStreamContext = true
 			cfg.DefaultHTTPContext = false
+			cfg.HTTPContext.HealthStatus = healthCheck
 		case HTTPCfg:
 			createDir(ngxc.nginxCertsPath)
 			cfg.DefaultStreamContext = false
 			cfg.DefaultHTTPContext = true
 			cfg.HTTPContext.ServerNamesHashMaxSize = NewDefaultHTTPContext().MainServerNamesHashMaxSize
-			cfg.HTTPContext.HealthStatus = healthStatus
+			cfg.HTTPContext.HealthStatus = healthCheck
 		}
 		ngxc.mainCfg = cfg
 		ngxc.UpdateMainConfigFile()

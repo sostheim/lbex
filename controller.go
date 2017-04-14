@@ -68,7 +68,7 @@ type lbExController struct {
 	cfgtor *nginx.Configurator
 }
 
-func newLbExController(clientset *kubernetes.Clientset, service *string) *lbExController {
+func newLbExController(clientset *kubernetes.Clientset, service *string, healthCheck bool) *lbExController {
 	// local testing -> no actual NGINX instance
 	cfgType := nginx.StreamCfg
 	if runtime.GOOS == "darwin" {
@@ -76,7 +76,7 @@ func newLbExController(clientset *kubernetes.Clientset, service *string) *lbExCo
 	}
 
 	// Create and start the NGINX LoadBalancer
-	ngxc, _ := nginx.NewNginxController(cfgType, "/etc/nginx/", false)
+	ngxc, _ := nginx.NewNginxController(cfgType, "/etc/nginx/", healthCheck)
 	ngxc.Start()
 
 	configtor := nginx.NewConfigurator(ngxc)
