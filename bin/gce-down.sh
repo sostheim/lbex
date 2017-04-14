@@ -23,9 +23,9 @@ gcloud compute instance-groups managed delete \
   --project=${LBEX_PROJECT} --quiet || true
 
 # delete the healthcheck
-gcloud compute http-health-checks delete \
-  ${LBEX_BASE_NAME}-healthcheck \
-  --project=${LBEX_PROJECT} --quiet || true
+#gcloud compute http-health-checks delete \
+#  ${LBEX_BASE_NAME}-healthcheck \
+#  --project=${LBEX_PROJECT} --quiet || true
 
 # delete the instance template
 gcloud compute instance-templates delete \
