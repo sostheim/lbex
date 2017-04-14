@@ -37,11 +37,12 @@ var LbexType = "alpha"
 var LbexGitCommit string
 
 var (
-	kubeconfig  = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	proxy       = flag.String("proxy", "", "kubctl proxy server running at the given url")
-	serviceName = flag.String("service-name", "", "Provide LoadBalancing for the specified service.")
-	version     = flag.Bool("version", false, "Display version info")
-	healhCheck  = flag.Bool("health-check", true, "Provide a health check endpoint for lbex only")
+	kubeconfig      = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	proxy           = flag.String("proxy", "", "kubctl proxy server running at the given url")
+	serviceName     = flag.String("service-name", "", "Provide LoadBalancing for the specified service.")
+	version         = flag.Bool("version", false, "Display version info")
+	healthCheck     = flag.Bool("health-check", true, "Enable lbex-only healthcheck")
+	healthCheckPort = flag.Int("health-port", 7331, "Lbex healthcheck port")
 )
 
 func init() {
@@ -122,7 +123,7 @@ func main() {
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	lbex := newLbExController(clientset, serviceName, *healhCheck)
+	lbex := newLbExController(clientset, serviceName, *healthCheck, *healthCheckPort)
 	lbex.run()
 
 	for {

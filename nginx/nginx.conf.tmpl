@@ -97,7 +97,7 @@ http {
 
     {{if .HealthStatus}}
     server {
-        listen 80 default_server;
+        listen {{.HealthPort}} default_server;
         server_name _;
 
         location /nginx-health {
@@ -115,7 +115,7 @@ http {
 {{if .HTTPContext.HealthStatus}}
 http {
     server {
-        listen 7331 default_server;
+        listen {{.HTTPContext.HealthPort}} default_server;
         server_name _;
 
         location / {
