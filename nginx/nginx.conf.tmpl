@@ -115,7 +115,7 @@ http {
 {{if .HTTPContext.HealthStatus}}
 http {
     server {
-        listen {{.HealthPort}} default_server;
+        listen {{.HTTPContext.HealthPort}} default_server;
         server_name _;
 
         location / {
