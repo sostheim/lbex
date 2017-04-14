@@ -13,11 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License. 
 #
-# Dockerfile - External LoadBalacner (lbex).
+# Dockerfile - External LoadBalancer (lbex).
 #
-# - Example Commands:
-# docker build --rm --pull --tag sostheim/lbex .
-#
+
 FROM nginx:1.11.10
 MAINTAINER Rick Sostheim
 LABEL vendor="Samsung CNCT"
@@ -33,6 +31,6 @@ RUN rm /etc/nginx/conf.d/*
 RUN apt update
 RUN apt install netcat-openbsd net-tools iproute2 -y
 
-COPY lbex nginx/http.tmpl nginx/stream.tmpl nginx/nginx.conf.tmpl /
+COPY build/linux_amd64/lbex nginx/http.tmpl nginx/stream.tmpl nginx/nginx.conf.tmpl /
 
 ENTRYPOINT ["/lbex"]

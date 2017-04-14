@@ -107,7 +107,7 @@ const (
 	// External - upstream nodes IP address type is external public or private
 	External string = "external"
 	// DefaultNodeAddressType - default address type
-	DefaultNodeAddressType = External
+	DefaultNodeAddressType = Internal
 )
 
 // Target is a service network topology target
