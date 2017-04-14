@@ -111,9 +111,19 @@ http {
     include /etc/nginx/conf.d/*.http.conf;
     {{end}}
 }
+{{else}}
+{{if .HTTPContext.HealthStatus}}
+http {
+    server {
+        listen 7331 default_server;
+        server_name _;
+
+        location / {
+            access_log off;
+            default_type text/plain;
+            return 200 "healthy\n";
+        }
+    }
+}
+{{end}}
 {{end -}}
-
-
-
-
-

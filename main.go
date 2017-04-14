@@ -41,6 +41,7 @@ var (
 	proxy       = flag.String("proxy", "", "kubctl proxy server running at the given url")
 	serviceName = flag.String("service-name", "", "Provide LoadBalancing for the specified service.")
 	version     = flag.Bool("version", false, "Display version info")
+	healhCheck  = flag.Bool("health-check", true, "Provide a health check endpoint for lbex only")
 )
 
 func init() {
@@ -121,7 +122,7 @@ func main() {
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	lbex := newLbExController(clientset, serviceName)
+	lbex := newLbExController(clientset, serviceName, *healhCheck)
 	lbex.run()
 
 	for {
