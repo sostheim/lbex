@@ -33,7 +33,7 @@ fi
 
 if [ -z "${LBEX_PORTS+x}" ]; then
   LBEX_PORTS="80,443"
-  inf "Using '${LBEX_PORTS}' as cluster zone"
+  inf "Using '${LBEX_PORTS}' as lbex ports"
 fi
 
 if [ -z "${LBEX_MAX_AUTOSCALE+x}" ]; then
@@ -67,6 +67,7 @@ gcloud compute firewall-rules create \
   --network="${LBEX_BASE_NAME}-network" \
   --allow tcp,udp,icmp \
   --source-ranges=0.0.0.0/0 \
+  --target-tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
 
 
@@ -123,6 +124,7 @@ gcloud compute instance-templates create \
   --image-project=cos-cloud \
   --image-family=cos-stable \
   --scopes=compute-rw,cloud-platform,storage-full,logging-write,monitoring \
+  --tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
 
 # create a managed group
