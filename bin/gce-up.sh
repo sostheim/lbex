@@ -27,7 +27,7 @@ if [ -z "${LBEX_REGION+x}" ]; then
 fi
 
 if [ -z "${LBEX_CIDR+x}" ]; then
-  LBEX_CIDR='10.128.0.0/28'
+  LBEX_CIDR='10.150.0.0/28'
   inf "Using '${LBEX_CIDR}' as CIDR"
 fi
 
