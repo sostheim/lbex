@@ -16,6 +16,11 @@ if [ -z "${LBEX_CLUSTER_NAME+x}" ]; then
   exit 1
 fi
 
+if [ -z "${LBEX_CLUSTER_NETWORK+x}" ]; then
+  show_help
+  exit 1
+fi
+
 if [ -z "${LBEX_REGION+x}" ]; then
   LBEX_REGION='us-central1'
   inf "Using '${LBEX_REGION}' as region"
@@ -31,59 +36,33 @@ if [ -z "${LBEX_CLUSTER_ZONE+x}" ]; then
   inf "Using '${LBEX_CLUSTER_ZONE}' as cluster zone"
 fi
 
-if [ -z "${LBEX_PORTS+x}" ]; then
-  LBEX_PORTS="80,443"
-  inf "Using '${LBEX_PORTS}' as lbex ports"
-fi
-
 if [ -z "${LBEX_MAX_AUTOSCALE+x}" ]; then
   LBEX_MAX_AUTOSCALE=10
   inf "Using '${LBEX_MAX_AUTOSCALE}' as max number of LBEX instances"
 fi
 
-#if [ -z "${LBEX_HEALTH_PORT+x}" ]; then
-#  LBEX_HEALTH_PORT=7331
-#  inf "Using '${LBEX_HEALTH_PORT}' as health check port"
-#fi
+if [ -z "${LBEX_HEALTH_PORT+x}" ]; then
+  LBEX_HEALTH_PORT=7331
+  inf "Using '${LBEX_HEALTH_PORT}' as health check port"
+fi
 
-# create a custom network and subnet
-gcloud compute networks create \
-  ${LBEX_BASE_NAME}-network \
-  --description="Network for ${LBEX_BASE_NAME} LBEX instances" \
-  --mode=custom \
-  --project=${LBEX_PROJECT}
-
+# create lbex subnet
 gcloud compute networks subnets create \
   ${LBEX_BASE_NAME}-subnetwork \
   --description="Sub-network for ${LBEX_BASE_NAME}-LBEX instances" \
-  --network="${LBEX_BASE_NAME}-network" \
+  --network="${LBEX_CLUSTER_NETWORK}" \
   --range=${LBEX_CIDR} \
   --region=${LBEX_REGION} \
   --project=${LBEX_PROJECT}
 
-# add all-firewall rule
+# add firewall rules
 gcloud compute firewall-rules create \
-  ${LBEX_BASE_NAME}-all-traffic \
-  --network="${LBEX_BASE_NAME}-network" \
+  ${LBEX_BASE_NAME}-internal \
+  --network="${LBEX_CLUSTER_NETWORK}" \
   --allow tcp,udp,icmp \
   --source-ranges=0.0.0.0/0 \
   --target-tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
-
-
-# create a string of '-p port:port' pairs for docker port publishing
-DOCKER_PORTS=""
-for i in ${LBEX_PORTS//,/ }
-do
-  port_array=(${i//// })
-  if [[ ${#port_array[@]} > 1 ]]; then
-    port_pair="${port_array[0]}:${port_array[0]}/${port_array[1]}"
-  else
-    port_pair="${i}:${i}"
-  fi
-
-  DOCKER_PORTS="${DOCKER_PORTS}-p ${port_pair} " 
-done
 
 # create 'templated' cloud init for the instance template
 TEMPDIR=$(mktemp -d "${TMPDIR:-/tmp/}$(basename 0).XXXXXXXXXXXX")
@@ -101,12 +80,15 @@ write_files:
     [Service]
     Environment=USER=root
     Restart=always
-    ExecStartPre=/bin/mkdir -p /var/kubeconfig
-    ExecStartPre=/usr/bin/toolbox /google-cloud-sdk/bin/gcloud components install kubectl -q
-    ExecStartPre=/usr/bin/toolbox --bind=/var/kubeconfig:/root/.kube /google-cloud-sdk/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
-    ExecStart=/usr/bin/docker run --rm --name=lbex --volume /var/kubeconfig:/kubeconfig ${DOCKER_PORTS} quay.io/samsung_cnct/lbex:latest --kubeconfig /kubeconfig/config
-    ExecStop=/usr/bin/docker stop lbex
-    ExecStopPost=/usr/bin/docker rm lbex
+    ExecStartPre=/usr/bin/curl -o /usr/local/bin/kubectl -LO https://storage.googleapis.com/kubernetes-release/release/\$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    ExecStartPre=/bin/chmod +x /usr/local/bin/kubectl
+    ExecStartPre=/usr/bin/curl -s -o /usr/local/bin/jq -LO https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
+    ExecStartPre=/bin/chmod +x /usr/local/bin/jq
+    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "\$(/usr/bin/jq -r ".assets[] | select(.name | test(\"linux_amd64\")) | .browser_download_url" < <( /usr/bin/curl -s "https://api.github.com/repos/samsung-cnct/lbex/releases/latest" ))"'
+    ExecStartPre=/bin/tar -zxvf /tmp/lbex.tar.gz -C /usr/local/bin
+    ExecStartPre=/bin/chmod +x /usr/local/bin/lbex
+    ExecStartPre=/usr/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
+    ExecStart=/usr/local/bin/lbex --kubeconfig /root/.kube/config --health-check --health-port ${LBEX_HEALTH_PORT}
 runcmd:
 - systemctl daemon-reload
 - systemctl start lbex.service
@@ -121,8 +103,8 @@ gcloud compute instance-templates create \
   --network="${LBEX_BASE_NAME}-network" \
   --subnet="${LBEX_BASE_NAME}-subnetwork" \
   --region=${LBEX_REGION} \
-  --image-project=cos-cloud \
-  --image-family=cos-stable \
+  --image-project=debian-cloud \
+  --image-family=debian-8 \
   --scopes=compute-rw,cloud-platform,storage-full,logging-write,monitoring \
   --tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
@@ -149,20 +131,20 @@ gcloud compute instance-groups managed set-autoscaling \
   --project=${LBEX_PROJECT}
 
 # create a healthcheck and set autohealing
-#gcloud compute http-health-checks create \
-#  ${LBEX_BASE_NAME}-healthcheck \
-#  --description="${LBEX_BASE_NAME} health checker" \
-#  --check-interval=5s \
-#  --healthy-threshold=2 \
-#  --port=${LBEX_HEALTH_PORT} \
-#  --timeout=5s \
-#  --unhealthy-threshold=2 \
-#  --project=${LBEX_PROJECT}
+gcloud compute http-health-checks create \
+  ${LBEX_BASE_NAME}-healthcheck \
+  --description="${LBEX_BASE_NAME} health checker" \
+  --check-interval=5s \
+  --healthy-threshold=2 \
+  --port=${LBEX_HEALTH_PORT} \
+  --timeout=5s \
+  --unhealthy-threshold=2 \
+  --project=${LBEX_PROJECT}
 
-#gcloud beta compute instance-groups managed set-autohealing \
-#  ${LBEX_BASE_NAME}-instance-group \
-#  --initial-delay=180 \
-#  --http-health-check=${LBEX_BASE_NAME}-healthcheck \
-#  --region=${LBEX_REGION} \
-#  --project=${LBEX_PROJECT}
+gcloud beta compute instance-groups managed set-autohealing \
+  ${LBEX_BASE_NAME}-instance-group \
+  --initial-delay=180 \
+  --http-health-check=${LBEX_BASE_NAME}-healthcheck \
+  --region=${LBEX_REGION} \
+  --project=${LBEX_PROJECT}
 

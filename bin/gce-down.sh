@@ -23,9 +23,9 @@ gcloud compute instance-groups managed delete \
   --project=${LBEX_PROJECT} --quiet || true
 
 # delete the healthcheck
-#gcloud compute http-health-checks delete \
-#  ${LBEX_BASE_NAME}-healthcheck \
-#  --project=${LBEX_PROJECT} --quiet || true
+gcloud compute http-health-checks delete \
+  ${LBEX_BASE_NAME}-healthcheck \
+  --project=${LBEX_PROJECT} --quiet || true
 
 # delete the instance template
 gcloud compute instance-templates delete \
@@ -37,13 +37,8 @@ gcloud compute firewall-rules delete \
   ${LBEX_BASE_NAME}-all-traffic \
   --project=${LBEX_PROJECT} --quiet || true
 
-# delete the subnet and network
+# delete the subnet
 gcloud compute networks subnets delete \
   ${LBEX_BASE_NAME}-subnetwork \
   --region=${LBEX_REGION} \
   --project=${LBEX_PROJECT} --quiet || true
-
-gcloud compute networks delete \
-  ${LBEX_BASE_NAME}-network \
-  --project=${LBEX_PROJECT} --quiet || true
-
