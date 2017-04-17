@@ -84,7 +84,7 @@ write_files:
     ExecStartPre=/bin/chmod +x /usr/local/bin/kubectl
     ExecStartPre=/usr/bin/curl -s -o /usr/local/bin/jq -LO https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
     ExecStartPre=/bin/chmod +x /usr/local/bin/jq
-    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "\$(/usr/bin/jq -r ".assets[] | select(.name | test(\"linux_amd64\")) | .browser_download_url" < <( /usr/bin/curl -s "https://api.github.com/repos/samsung-cnct/lbex/releases/latest" ))"'
+    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "\$(/usr/local/bin/jq -r ".assets[] | select(.name | test(\"linux_amd64.tar.gz\")) | .browser_download_url" < <( /usr/bin/curl -s "https://api.github.com/repos/samsung-cnct/lbex/releases/latest" ))"'
     ExecStartPre=/bin/tar -zxvf /tmp/lbex.tar.gz -C /usr/local/bin
     ExecStartPre=/bin/chmod +x /usr/local/bin/lbex
     ExecStartPre=/usr/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
