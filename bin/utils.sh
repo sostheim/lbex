@@ -36,7 +36,7 @@ function show_help {
   inf "For example:"
   inf "gce-up.sh --name mylbex --project k8s-work --cidr 10.128.0.0/28 --region us-central1 --cluster-name my-k8s-cluster --num-autoscale 10 --cluster-zone us-central1-a --cluster-network my-cluster-network --health-port 1337"
   inf "or"
-  inf "gce-down.sh --name mylbex --project k8s-work"
+  inf "gce-down.sh --name mylbex --region us-central1 --project k8s-work"
 }
 
 while [[ $# -gt 0 ]]
