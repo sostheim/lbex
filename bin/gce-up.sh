@@ -95,18 +95,17 @@ write_files:
 
     [Service]
     Environment=HOME=/root
+    WorkingDirectory=-/usr/local/bin/lbex
     Restart=always
     ExecStartPre=/usr/bin/curl -o /usr/local/bin/kubectl -LO https://storage.googleapis.com/kubernetes-release/release/\$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
     ExecStartPre=/bin/chmod +x /usr/local/bin/kubectl
-    ExecStartPre=/usr/bin/curl -s -o /usr/local/bin/jq -LO https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
-    ExecStartPre=/bin/chmod +x /usr/local/bin/jq
-    ExecStartPre=/bin/bash -c "/usr/bin/curl -so /tmp/lbex.tar.gz -OL \"\$(/usr/local/bin/jq -r \".assets[] | select(.name | test(\"linux_amd64.tar.gz\")) | .browser_download_url\" < <( /usr/bin/curl -s \"https://api.github.com/repos/samsung-cnct/lbex/releases/latest\" ))\""
+    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "https://github.com/samsung-cnct/lbex/releases/download/\$(/usr/bin/basename "\$(/usr/bin/curl -w "%{url_effective}\\n" -I -L -s -S https://github.com/samsung-cnct/lbex/releases/latest -o /dev/null)")/linux_amd64.tar.gz"'
     ExecStartPre=/bin/mkdir -p /usr/local/bin/lbex
     ExecStartPre=/bin/tar -zxvf /tmp/lbex.tar.gz -C /usr/local/bin/lbex
     ExecStartPre=/bin/chmod +x /usr/local/bin/lbex/lbex
     ExecStartPre=/usr/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
-    ExecStartPre=/bin/rm /etc/nginx/conf.d/*
-    ExecStart=/usr/local/bin/lbex/lbex --kubeconfig /root/.kube/config --health-check --health-port ${LBEX_HEALTH_PORT}
+    ExecStartPre=/bin/rm --force /etc/nginx/conf.d/*
+    ExecStart=/usr/local/bin/lbex/lbex --kubeconfig /root/.kube/config --health-check --health-port ${LBEX_HEALTH_PORT} --v 2
 runcmd:
 - systemctl daemon-reload
 - systemctl start lbex.service
