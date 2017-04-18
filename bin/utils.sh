@@ -23,6 +23,7 @@ function show_help {
   inf "gce-up.sh or gce-down.sh [flags] \n"
   inf "Flags are:"
   inf "-c|--cidr            - CIDR range for LBEX instance IP addresses, big enough for at least 'num-autoscale' IPs. Should not clash with GKE cluster ip space. Default is 10.150.0.0/28."
+  inf "-g|--ingress-cidr    - Restrict traffic incoming to lbex cluster to this CIDR"
   inf "-h|--help            - Show this help.\n"
   inf "-i|--project         - Google project id. Required."
   inf "-m|--cluster-name    - Target GKE cluster name. Required for gce-up.sh."
@@ -45,6 +46,10 @@ key="$1"
 case $key in
   -n|--name)
   LBEX_BASE_NAME="$2"
+  shift
+  ;;
+  -g|--ingress-cidr)
+  LBEX_INGRESS_CIDR="$2"
   shift
   ;;
   -i|--project)
