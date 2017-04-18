@@ -222,3 +222,53 @@ For example, running the following command against the `nginx:latest` image show
                 --as-needed -pie'
 
 As you can see several stream modules are included in the NGINX build configuration. 
+
+## Installation on Google Cloud
+
+[Bash scripts](bin) for installation on Google Cloud are provided under the bin folder.  
+Rn `./gce-up.sh --help` or `./gce-down.sh --help` for list of options:
+
+```
+Usage:
+
+gce-up.sh or gce-down.sh [flags]
+
+Flags are:
+-c|--cidr            - CIDR range for LBEX instance IP addresses, big enough for at least 'num-autoscale' IPs. Should not clash with GKE cluster ip space. Default is 10.150.0.0/28.
+-h|--help            - Show this help.
+
+-i|--project         - Google project id. Required.
+-m|--cluster-name    - Target GKE cluster name. Required for gce-up.sh.
+-n|--name            - base name for all lbex resource. Required.
+-p|--health-port     - LBEX healthcheck port. Default is 7331.
+-r|--region          - GCE region name. Default is us-central1.
+-s|--num-autoscale   - Maximum number of autoscaled LBEX instances. Default is 10.
+-t|--cluster-network - GCE network name of the GKE cluster. Must be a custom type network. Required
+-z|--cluster-zone    - Target GKE cluster primary zone. Default is us-central1-a.
+
+For example:
+gce-up.sh --name mylbex --project k8s-work --cidr 10.128.0.0/28 --region us-central1 --cluster-name my-k8s-cluster --num-autoscale 10 --cluster-zone us-central1-a --cluster-network my-cluster-network --health-port 1337
+or
+gce-down.sh --name mylbex --region us-central1 --project k8s-work
+```
+
+### Google cloud prerequisites
+
+For LBEX to work with your GKE cluster, cluster must have been created with non-default, non-automatic [subnet network](https://cloud.google.com/compute/docs/subnetworks#subnet_network). You will need to provide your cluster's name, network name and a CIDR block that does not conflict with any existing CIDR blocks in your GKE cluster's subnet network.
+
+### Running scripts
+
+For example, given a GKE cluster named `mycluster` with primary zone of `us-central1-a`; created using a subnet network `mynetwork` with one `us-central1` subnet with a CIDR of `10.128.0.0/20` in a Google Project named `myproject`:
+
+```
+./gce-up.sh \
+  --name my-lbex \
+  --project myproject \
+  --region us-central1 \
+  --cidr 10.150.0.0/28 \
+  --cluster-name mycluster \
+  --cluster-zone us-central1-a \
+  --cluster-network mynetwork 
+```
+
+This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, autoheal based on lbex healthcheck at default port `7331`; with CIDR `10.150.0.0/28`, monitoring API server of GKE cluster `mycluster`

@@ -21,6 +21,11 @@ if [ -z "${LBEX_CLUSTER_NETWORK+x}" ]; then
   exit 1
 fi
 
+if [ -z "${LBEX_INGRESS_CIDR+x}" ]; then 
+  LBEX_INGRESS_CIDR="0.0.0.0/0"
+  inf "Using '${LBEX_INGRESS_CIDR}' as lbex ingress traffic CIDR"
+fi
+
 if [ -z "${LBEX_REGION+x}" ]; then
   LBEX_REGION='us-central1'
   inf "Using '${LBEX_REGION}' as region"
@@ -59,16 +64,16 @@ gcloud compute networks subnets create \
 inf "Creating firewall rule ${LBEX_BASE_NAME}-lbex-traffic"
 gcloud compute firewall-rules create \
   ${LBEX_BASE_NAME}-all-traffic \
-  --description "Firewall rule for traffic entering ${LBEX_BASE_NAME} lbex cluster"
+  --description "Firewall rule for traffic entering ${LBEX_BASE_NAME} lbex cluster" \
   --network="${LBEX_CLUSTER_NETWORK}" \
   --allow tcp,udp,icmp \
-  --source-ranges=0.0.0.0/0 \
+  --source-ranges=${LBEX_INGRESS_CIDR} \
   --target-tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
 inf "Creating firewall rule ${LBEX_BASE_NAME}-cluster-traffic"
 gcloud compute firewall-rules create \
   ${LBEX_BASE_NAME}-cluster-traffic \
-  --description "Firewall rule for traffic between ${LBEX_BASE_NAME} lbex cluster and ${LBEX_CLUSTER_NAME} GKE cluster"
+  --description "Firewall rule for traffic between ${LBEX_BASE_NAME} lbex cluster and ${LBEX_CLUSTER_NAME} GKE cluster" \
   --network="${LBEX_CLUSTER_NETWORK}" \
   --allow tcp:1-65535,udp:1-65535,icmp \
   --source-ranges=${LBEX_CIDR} \
@@ -84,16 +89,26 @@ write_files:
   owner: root
   content: |
     [Unit]
-    Description=Start nginx
+    Description=The NGINX HTTP and reverse proxy server
+    After=syslog.target network.target remote-fs.target nss-lookup.target
 
     [Service]
-    Restart=always
+    Type=forking
+    PIDFile=/run/nginx.pid
     ExecStartPre=/bin/bash -c "echo \"deb http://nginx.org/packages/ubuntu/ xenial nginx\" > /etc/apt/sources.list.d/nginx.list"
     ExecStartPre=/bin/bash -c "echo \"deb-src http://nginx.org/packages/ubuntu/ xenial nginx\" >> /etc/apt/sources.list.d/nginx.list"
     ExecStartPre=/usr/bin/apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ABF5BD827BD9BF62
     ExecStartPre=/usr/bin/apt-get update -y
     ExecStartPre=/usr/bin/apt-get install nginx=1.12.0-1~xenial -y
+    ExecStartPre=/usr/sbin/nginx -t
     ExecStart=/usr/sbin/nginx
+    ExecReload=/bin/kill -s HUP \$MAINPID
+    ExecStop=/bin/kill -s QUIT \$MAINPID
+    PrivateTmp=true
+
+    [Install]
+    WantedBy=multi-user.target
+
 - path: /etc/systemd/system/lbex.service
   permissions: 0644
   owner: root
@@ -121,7 +136,7 @@ runcmd:
 - systemctl start nginx.service
 EOF
 
-inf "Creating instance template ${LBEX_BASE_NAME}-instance"
+inf "Creating instance template ${LBEX_BASE_NAME}-instance with external addresses"
 gcloud compute instance-templates create \
   ${LBEX_BASE_NAME}-instance \
   --description="${LBEX_BASE_NAME} instance template" \
@@ -135,6 +150,7 @@ gcloud compute instance-templates create \
   --scopes=compute-rw,cloud-platform,storage-full,logging-write,monitoring \
   --tags=${LBEX_BASE_NAME} \
   --project=${LBEX_PROJECT}
+
 
 # create a managed group
 inf "Creating managed instance group ${LBEX_BASE_NAME}-instance-group"
