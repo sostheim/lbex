@@ -32,9 +32,12 @@ gcloud compute instance-templates delete \
   ${LBEX_BASE_NAME}-instance \
   --project=${LBEX_PROJECT} --quiet || true
 
-# delete all-firewall rule
+# delete firewall rules
 gcloud compute firewall-rules delete \
   ${LBEX_BASE_NAME}-all-traffic \
+  --project=${LBEX_PROJECT} --quiet || true
+gcloud compute firewall-rules delete \
+  ${LBEX_BASE_NAME}-cluster-traffic \
   --project=${LBEX_PROJECT} --quiet || true
 
 # delete the subnet

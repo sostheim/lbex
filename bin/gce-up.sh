@@ -56,13 +56,22 @@ gcloud compute networks subnets create \
   --project=${LBEX_PROJECT}
 
 # add firewall rules
-inf "Creating firewall rule ${LBEX_BASE_NAME}-all-traffic"
+inf "Creating firewall rule ${LBEX_BASE_NAME}-lbex-traffic"
 gcloud compute firewall-rules create \
   ${LBEX_BASE_NAME}-all-traffic \
+  --description "Firewall rule for traffic entering ${LBEX_BASE_NAME} lbex cluster"
   --network="${LBEX_CLUSTER_NETWORK}" \
   --allow tcp,udp,icmp \
   --source-ranges=0.0.0.0/0 \
   --target-tags=${LBEX_BASE_NAME} \
+  --project=${LBEX_PROJECT}
+inf "Creating firewall rule ${LBEX_BASE_NAME}-cluster-traffic"
+gcloud compute firewall-rules create \
+  ${LBEX_BASE_NAME}-cluster-traffic \
+  --description "Firewall rule for traffic between ${LBEX_BASE_NAME} lbex cluster and ${LBEX_CLUSTER_NAME} GKE cluster"
+  --network="${LBEX_CLUSTER_NETWORK}" \
+  --allow tcp:1-65535,udp:1-65535,icmp \
+  --source-ranges=${LBEX_CIDR} \
   --project=${LBEX_PROJECT}
 
 # create 'templated' cloud init for the instance template
@@ -145,7 +154,7 @@ gcloud compute instance-groups managed set-autoscaling \
   --description="${LBEX_BASE_NAME}-instance-group autoscaler" \
   --min-num-replicas=2 \
   --scale-based-on-cpu \
-  --target-cpu-utilization=0.4 \
+  --target-cpu-utilization=0.7 \
   --region=${LBEX_REGION} \
   --project=${LBEX_PROJECT}
 
