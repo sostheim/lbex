@@ -56,7 +56,9 @@ Everything should look very familiar with one obvious exception.  There is nothi
 - distributes network traffic, round robin, to all Pods running the NTP service
 - network traffic is delivered to the worker node's UDP node port 30123
 
-An important consideration is that the LBEX is supplemental to any other load balancers currently in existence in the cluster.  Significantly, this in no way affects the native Kubernetes `kube-proxy` based `iptables` load balancing.  Less obvious may be the fact that any other load balancer defined for a service can operate in parallel with very limited restrictions.  As a side note, it is very likely that a significant portion of the NGINX server configuration directives will eventually become available as ConfigMaps.  
+An important consideration is that the LBEX is supplemental to any other load balancers currently in existence in the cluster.  Significantly, this in no way affects the native Kubernetes `kube-proxy` based `iptables` load balancing.  Less obvious may be the fact that any other load balancer defined for a service can operate in parallel with very limited restrictions.  
+
+As a final note, it is very likely that a significant portion of the NGINX server configuration directives will eventually become available as configurable options via Kubernetes ConfigMaps in future releases.  
 
 ## Annotations
 Kubernetes [Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) currently play a central role in defining how LBEX is used.  Ideally this configuration data will be migrated to Kubernetes [ConfigMaps](https://kubernetes.io/docs/user-guide/configmap/) soon.  When, and if, that happens support will be provided for all existing annotations for several subsequent versions.
@@ -69,6 +71,7 @@ The annotations defined for LBEX are as follows:
         <th>Default</th>
         <th>Required</th>
     </tr>
+    <tr>
         <td>kubernetes.io/loadbalancer-class</td>
         <td>loadbalancer-lbex</td>
         <td>None</td>
@@ -88,11 +91,11 @@ The annotations defined for LBEX are as follows:
     </tr>
     <tr>
         <td>loadbalancer.lbex/resolver</td>
-        <td>Any IP Address</td>
+        <td>The IP Address of a valid, live DNS resolver</td>
         <td>None</td>
         <td>False</td>
-    <tr>
     </tr>
+    <tr>
         <td>loadbalancer.lbex/upstream-type</td>
         <td>node, <br />pod, <br />cluster-ip</td>
         <td>node</td>
@@ -131,10 +134,10 @@ The final two annotations are only read if, and only if, `loadbalancer.lbex/upst
 <b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or its' `external` public IP address. 
 
 ### Annotation Selection
-It is incumbent on the service designer to make sensible selections for annotation values.  For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with one.  It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, 2) LBEX is not running as a Pod in the cluster.  By definition a cluster IP address is only accessible to members of the cluster.
+It is incumbent on the service designer to make sensible selections for annotation values.  For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with external IP addresses.  It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, 2) LBEX is not running as a Pod inside the Kubernetes the cluster.  By definition a cluster IP address is only accessible to members of the cluster.
 
 ## Using LBEX Example - Revisited
-Returning to the pervious example, here is the updated version that takes advantage of the default values for all but the one required annotation.  As before, the following [Service Specification](https://kubernetes.io/docs/concepts/services-networking/service/) would configure LBEX for the NTP Service. 
+Returning to the pervious example, here is the updated version that takes advantage of the default values for all but the one required annotation.  As before, the following Service Specification would configure LBEX for the NTP Service. 
 ```
 apiVersion: v1
 kind: Service
@@ -157,18 +160,7 @@ metadata:
     nodePort: 30123
 ```
 
-So, by taking advantage of several sensible defaults, the Service definition is exactly as it would be were it not using LBEX aside from the addition of a one line annotation.
-
-## Motivation
-A very specific use case arises for Google Container Engine (GKE) base Kubernetes services that require an external load balancer, but not a public IP address.  That is, services that need to be exposed to RFC1918 address spaces, but that address space is neither part of the Cluster's IP address space, or the [GCP Subnet Network](https://cloud.google.com/compute/docs/networking#subnet_network) Auto [IP Ranges](https://cloud.google.com/compute/docs/networking#ip_ranges).  This is particularly challenging when connecting to GCP via [Google Cloud VPN](https://cloud.google.com/compute/docs/vpn/overview), where the on premise peer network side of the VPN is also an RFC1918 10/8 network space.  This configuration, in and of itself, presents certain challenges described here: [GCI IP Tables Configuration](https://github.com/samsung-cnct/gci-iptables-conf-agent).   Once the two networks are interconnected, there is still the issue of communicating with the GCP region's private IP subnet range, and further being able to reach exposed Kubernetes services in the Kubernetes Cluster CIDR range.
-
-There were several attempts at solving this problem with a combination of various [Google Cloud Load Balancing](https://cloud.google.com/load-balancing/) components, including using the [GCP Internal Load Balancer](https://cloud.google.com/compute/docs/load-balancing/internal/) and following the model provided by the [Internal Load Balancing using HAProxy on Google Compute Engine](https://cloud.google.com/solutions/internal-load-balancing-haproxy) example.
-
-In the end, the best solution we were able to arrive at was 1) not dynamic and 2) exposed a high order ephemeral port.  
-1. This meant that, since the GCP Internal LB solution had to have stable endpoints, there was an external requirement to ensure that service specifications confirmed to certain constraints.  Conversely, anytime a service configuration change was made, or a new service introduce in to the environment, a corresponding LB had to created and/or updated.
-2. This was first and foremost unsightly and awkward to manage.  Over time it was the leaky abstraction that was the most bothersome and provided extra motivation to move forward with a better solution.
- 
-Finally, there are challenges to automating all these things as well.  None of them are insurmountable by any means, but when justifying the engineering effort to automate operations you prefer it to be for the right solution.  
+So, by taking advantage of several sensible defaults, the service's definition is exactly as it would be were it not using LBEX aside from the addition of a one line annotation.
 
 ## NGINX Prerequisites
 
@@ -272,8 +264,9 @@ Finally, the `--service-name` option, allows us to provide a 1:1 mapping of load
 
 ## Installation on Google Cloud
 
-The [bash scripts](bin) for installation on Google Cloud are provided under the bin folder.  
-Run either: `./gce-up.sh --help`, or: `./gce-down.sh --help` for list of options:
+The [bash scripts](bin) for installation on Google Cloud are provided under the bin folder.
+
+Run either: `./gce-up.sh --help`, or: `./gce-down.sh --help` to see the list of supported options:
 
 ```
 Usage:
@@ -317,5 +310,15 @@ For example, given a GKE cluster named `mycluster` with primary zone of `us-cent
   --cluster-zone us-central1-a \
   --cluster-network mynetwork 
 ```
-
 This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, auto-heal based on lbex health check at default port `7331`; with CIDR `10.150.0.0/28`, monitoring the API server of GKE cluster `mycluster` for services to proivde external load balancing for.
+
+## Motivation
+A very specific use case arises for Google Container Engine (GKE) base Kubernetes services that require an external load balancer, but not a public IP address.  That is, services that need to be exposed to RFC1918 address spaces, but that address space is neither part of the Cluster's IP address space, or the [GCP Subnet Network](https://cloud.google.com/compute/docs/networking#subnet_network) Auto [IP Ranges](https://cloud.google.com/compute/docs/networking#ip_ranges).  This is particularly challenging when connecting to GCP via [Google Cloud VPN](https://cloud.google.com/compute/docs/vpn/overview), where the on premise peer network side of the VPN is also an RFC1918 10/8 network space.  This configuration, in and of itself, presents certain challenges described here: [GCI IP Tables Configuration](https://github.com/samsung-cnct/gci-iptables-conf-agent).   Once the two networks are interconnected, there is still the issue of communicating with the GCP region's private IP subnet range, and further being able to reach exposed Kubernetes services in the Kubernetes Cluster CIDR range.
+
+There were several attempts at solving this problem with a combination of various [Google Cloud Load Balancing](https://cloud.google.com/load-balancing/) components, including using the [GCP Internal Load Balancer](https://cloud.google.com/compute/docs/load-balancing/internal/) and following the model provided by the [Internal Load Balancing using HAProxy on Google Compute Engine](https://cloud.google.com/solutions/internal-load-balancing-haproxy) example.
+
+In the end, the best solution we were able to arrive at was 1) not dynamic and 2) exposed a high order ephemeral port.  
+1. This meant that, since the GCP Internal LB solution had to have stable endpoints, there was an external requirement to ensure that service specifications confirmed to certain constraints.  Conversely, anytime a service configuration change was made, or a new service introduce in to the environment, a corresponding LB had to created and/or updated.
+2. This was first and foremost unsightly and awkward to manage.  Over time it was the leaky abstraction that was the most bothersome and provided extra motivation to move forward with a better solution.
+ 
+Finally, there are challenges to automating all these things as well.  None of them are insurmountable by any means, but when justifying the engineering effort to automate operations you prefer it to be for the right solution.  
