@@ -5,8 +5,11 @@ The Load Balancer External (LBEX) project was built to attempt to resolve a spec
 In general, LBEX provides the ability to:
 - Service network traffic on any Linux distribution that supports the installation of NGINX including:
     -  Running on Bare Metal 
+        - as a container image or static binary
     -  Running on a Cloud Instance
-    -  Running as a Kubernetes managed Deployment  
+        - as a container image or static binary
+    -  Running as a Kubernetes managed Deployment
+        - as a container image defined in a [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) [Spec](https://kubernetes.io/docs/api-reference/v1.6/#pod-v1-core)      
 - Proxy/Load Balance traffic to: 
     - A Kubernetes ClusterIP Address and ServicePort
     - A Kubernetes Pod IP Address and Port
@@ -20,7 +23,7 @@ A deployment of LBEX requires, at a minimum, network connectivity to both the Ku
 
 The LBEX application can run in any environment where some reasonable combination of access to these two resources is available.    
 ## Using LBEX Example
-The following is an example of deploying a Kubernetes service that uses LBEX for it external load balancer.  Assume that our cluster provides an [NTP servers](https://en.wikipedia.org/wiki/Network_Time_Protocol) as a Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/).  The example show here is actually more verbose than necessary, but that's entirely for illustration.  We'll revisit this example after a full discussion of Annotations. The following [Service](https://kubernetes.io/docs/concepts/services-networking/service/) Specification would configure LBEX for the NTP Service. 
+The following is an example of deploying a Kubernetes service that uses LBEX for it external load balancer.  Assume that our cluster provides an [NTP servers](https://en.wikipedia.org/wiki/Network_Time_Protocol) as a Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/).  The example show here is actually more verbose than necessary, but that's entirely for illustration.  We'll revisit this example after a full discussion of Annotations. The following [Service](https://kubernetes.io/docs/concepts/services-networking/service/) [Specification](https://kubernetes.io/docs/api-reference/v1.6/#servicespec-v1-core) would configure LBEX for the NTP Service. 
 ```
 apiVersion: v1
 kind: Service
@@ -48,7 +51,7 @@ spec:
 ```
 
 ### How It Works
-Everything should look very familiar with one obvious exception.  There is nothing out of the ordinary here with respect to the service specification, aside from the metadata object's annotations.  The annotations shown are primarily for illustration purposes (we'll discuss annotations in more detail next).  The annotations show here have the effect of defining:
+Everything should look very familiar with one obvious exception.  There is nothing out of the ordinary here with respect to the service specification, aside from the metadata object's annotations.  The annotations shown are primarily for illustration purposes (we'll discuss annotations in more detail next).  The annotations shown here have the effect of defining:
 - an NGINX load balancer that accepts incoming traffic on UDP port 123
 - distributes network traffic, round robin, to all Pods running the NTP service
 - network traffic is delivered to the worker node's UDP node port 30123
@@ -115,13 +118,14 @@ The only mandatory value that must be present for LBEX to serve traffic for the 
 
 <b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections.  The option to select leas time (lowest measured time) is supported, but can only be used with NGINX Plus.
 
-<b>loadbalancer.lbex/method</b> Method is a supplemental argument to the least_time directive.  Similarly, it is supported in LBEX but requires NGINX Plus to function.  See reference: [least_time](http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time).
+<b>loadbalancer.lbex/method</b> - Method is a supplemental argument to the least_time directive.  Similarly, it is supported in LBEX but requires NGINX Plus to function.  See reference: [least_time](http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time).
 
 <b>loadbalancer.lbex/resolver</b> - Configures name servers used to resolve names of upstream servers into addresses. See reference: [resolver](https://nginx.org/en/docs/stream/ngx_stream_core_module.html#resolver).
 
 <b>loadbalancer.lbex/upstream-type</b> - Upstream type indicates the type of the backend service addresses to direct to.  The default, `node`, directs load balanced traffic to the Kubernetes host worker node and node port.  Alternatively, `pod` directs traffic to the Kubernetes Pod and its' corresponding port.  Finally, `cluster-ip' directs traffic to the Kubernetes Service's ClusterIP.
 
-This final two annotations are only read if, and only if, `loadbalancer.lbex/upstream-type=node`. 
+The final two annotations are only read if, and only if, `loadbalancer.lbex/upstream-type=node`. 
+
 <b>loadbalancer.lbex/node-set</b> - Selects the set of Kubernetes host worker nodes to add to the upstream for the load balancer.  The default `host` ensures that traffic is only directed to noes that are actively running a copy of the services backend pod.  By contrast, `all` will direct traffic to any available Kubernetes worker node.
 
 <b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or its' `external` public IP address. 
@@ -165,7 +169,6 @@ In the end, the best solution we were able to arrive at was 1) not dynamic and 2
 2. This was first and foremost unsightly and awkward to manage.  Over time it was the leaky abstraction that was the most bothersome and provided extra motivation to move forward with a better solution.
  
 Finally, there are challenges to automating all these things as well.  None of them are insurmountable by any means, but when justifying the engineering effort to automate operations you prefer it to be for the right solution.  
-
 
 ## NGINX Prerequisites
 
@@ -223,10 +226,54 @@ For example, running the following command against the `nginx:latest` image show
 
 As you can see several stream modules are included in the NGINX build configuration. 
 
+
+## Running LBEX
+As noted [above](##overview), LBEX can run as either a container image under a container runtime, or in a Kubernetes Pod.  Regardless of the runtime environment, LBEX has a number of command line options that define how it operates.
+
+```
+$ ./lbex --help
+Usage of ./lbex:
+      --alsologtostderr                  log to standard error as well as files
+      --health-check                     Enable lbex-only health check (default true)
+      --health-port int                  Lbex health check port (default 7331)
+      --kubeconfig string                absolute path to the kubeconfig file
+      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                   If non-empty, write log files in this directory
+      --logtostderr                      log to standard error instead of files
+      --proxy string                     kubctl proxy server running at the given url
+      --service-name string              Provide Load Balancing for the specified service.
+      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
+  -v, --v Level                          log level for V logs
+      --version                          Display version info
+      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
+```
+Without going in to an explanation of all of the parameters, many of which should have sufficient explanation in the help provided, of particular interest to controlling the operation of LBEX are the following:
+<b>--health-check</b> - Defaults to true, but may be disabled by passing a value of false.  Allows external service monitors to check the health of 'lbex' itself.  
+<b>--health-port</b> - Defaults to 7331, but may be set to any valid port number value.
+<b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.
+<b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).
+<b>--service-name</b> - Provide load balancing for service identified by the flag *only*.  
+
+Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running.  For example:
+```
+$ curl http://10.150.0.2:7331/ -w "HTTP Response Code: %{http_code}\n"
+healthy
+HTTP Response Code: 200
+```
+
+There is an implied default not noted here that relates to accessing the Kubernetes cluster.  LBEX will attempt to establish credentialed cluster access via the following methods listed in priority order:
+1. If `--proxy string` is provided use it, then it is used without attempting methods 2 and 3
+2. If `--kubeconfig string` is provided, then it is used without attempting method 3
+3. If neither method is specified, then assume we are running inside a Kubernetes Pod and use the associated Service Account.  See detailed information [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/.)
+
+Also implied in the ordering above is that only one attempt is made to access the cluster.  Regardless of which method is used, it is the only method attempted.  If the selected method fails, then LBEX terminates immediately without attempting any other access.  Therefore, it is unnecessary to specify more than one access method.
+
+Finally, the `--service-name` option, allows us to provide a 1:1 mapping of load balancer's to services, should we desire to do so.  The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX regardless of wether or not they supply the identifying annotation.  
+
 ## Installation on Google Cloud
 
-[Bash scripts](bin) for installation on Google Cloud are provided under the bin folder.  
-Rn `./gce-up.sh --help` or `./gce-down.sh --help` for list of options:
+The [bash scripts](bin) for installation on Google Cloud are provided under the bin folder.  
+Run either: `./gce-up.sh --help`, or: `./gce-down.sh --help` for list of options:
 
 ```
 Usage:
@@ -240,9 +287,9 @@ Flags are:
 -i|--project         - Google project id. Required.
 -m|--cluster-name    - Target GKE cluster name. Required for gce-up.sh.
 -n|--name            - base name for all lbex resource. Required.
--p|--health-port     - LBEX healthcheck port. Default is 7331.
+-p|--health-port     - LBEX health check port. Default is 7331.
 -r|--region          - GCE region name. Default is us-central1.
--s|--num-autoscale   - Maximum number of autoscaled LBEX instances. Default is 10.
+-s|--num-autoscale   - Maximum number of auto-scaled LBEX instances. Default is 10.
 -t|--cluster-network - GCE network name of the GKE cluster. Must be a custom type network. Required
 -z|--cluster-zone    - Target GKE cluster primary zone. Default is us-central1-a.
 
@@ -252,11 +299,11 @@ or
 gce-down.sh --name mylbex --region us-central1 --project k8s-work
 ```
 
-### Google cloud prerequisites
+### Google Cloud Prerequisites
 
-For LBEX to work with your GKE cluster, cluster must have been created with non-default, non-automatic [subnet network](https://cloud.google.com/compute/docs/subnetworks#subnet_network). You will need to provide your cluster's name, network name and a CIDR block that does not conflict with any existing CIDR blocks in your GKE cluster's subnet network.
+For LBEX to work with your GKE cluster, the cluster must have been created with non-default, non-automatic [subnet network](https://cloud.google.com/compute/docs/subnetworks#subnet_network). You will need to provide your cluster's name, network name and a CIDR block that does not conflict with any existing CIDR blocks in your GKE cluster's subnet network.
 
-### Running scripts
+### Running the Scripts
 
 For example, given a GKE cluster named `mycluster` with primary zone of `us-central1-a`; created using a subnet network `mynetwork` with one `us-central1` subnet with a CIDR of `10.128.0.0/20` in a Google Project named `myproject`:
 
@@ -271,4 +318,4 @@ For example, given a GKE cluster named `mycluster` with primary zone of `us-cent
   --cluster-network mynetwork 
 ```
 
-This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, autoheal based on lbex healthcheck at default port `7331`; with CIDR `10.150.0.0/28`, monitoring API server of GKE cluster `mycluster`
+This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, auto-heal based on lbex health check at default port `7331`; with CIDR `10.150.0.0/28`, monitoring the API server of GKE cluster `mycluster` for services to proivde external load balancing for.

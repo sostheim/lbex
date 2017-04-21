@@ -39,10 +39,10 @@ var LbexGitCommit string
 var (
 	kubeconfig      = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	proxy           = flag.String("proxy", "", "kubctl proxy server running at the given url")
-	serviceName     = flag.String("service-name", "", "Provide LoadBalancing for the specified service.")
+	serviceName     = flag.String("service-name", "", "Provide load balancing for the specified service - ONLY.")
 	version         = flag.Bool("version", false, "Display version info")
-	healthCheck     = flag.Bool("health-check", true, "Enable lbex-only healthcheck")
-	healthCheckPort = flag.Int("health-port", 7331, "Lbex healthcheck port")
+	healthCheck     = flag.Bool("health-check", true, "Enable health checking for LBEX (default true)")
+	healthCheckPort = flag.Int("health-port", 7331, "health check service port (default 7331)")
 )
 
 func init() {
