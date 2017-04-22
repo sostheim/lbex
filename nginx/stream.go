@@ -79,9 +79,14 @@ func IsStreamUpstreamDefault(su StreamUpstream) bool {
 // specified stream load balancer from NGINX conf directory
 func (ngxc *NginxController) DeleteStreamConfiguration(name string) {
 	filename := ngxc.getStreamConfigFileName(name)
-	glog.V(2).Infof("deleting %v", filename)
 
 	if ngxc.cfgType != LocalCfg {
+		// Many services are checked for existence, regarless of whether or not
+		// we have a configuration for that service.
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			return
+		}
+		glog.V(2).Infof("deleting %v", filename)
 		if err := os.Remove(filename); err != nil {
 			glog.Warningf("Failed to delete %v: %v", filename, err)
 		}

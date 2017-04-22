@@ -190,7 +190,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 	// some-namespace/some-service -> some-namespace-some-service
 	conf := strings.Replace(key, "/", "-", -1)
 	if !exists {
-		glog.V(2).Infof("syncServices: deleting service: %v\n", key)
+		glog.V(2).Infof("syncServices: deletion check for service: %v\n", key)
 		lbex.cfgtor.DeleteConfiguration(conf, nginx.StreamCfg)
 	} else {
 		err = ValidateServiceObjectType(storeObj)
