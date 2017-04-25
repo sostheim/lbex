@@ -32,8 +32,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// LbexMajorMinorPatch - semantic version string
 var LbexMajorMinorPatch string
+
+// LbexType - release type
 var LbexType = "alpha"
+
+// LbexGitCommit - git commit sha-1 hash
 var LbexGitCommit string
 
 var (
