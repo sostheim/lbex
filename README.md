@@ -111,7 +111,7 @@ The annotations defined for LBEX are as follows:
     </tr>
     <tr>
         <td>loadbalancer.lbex/node-set</td>
-        <td>host, all</td>
+        <td>host, <br />all</td>
         <td>host</td>
         <td>False</td>
     </tr>
@@ -121,13 +121,21 @@ The annotations defined for LBEX are as follows:
         <td>internal</td>
         <td>False</td>
     </tr>
+    <tr>
+        <td>loadbalancer.lbex/service-pool</td>
+        <td>Must be 1-63 characters, and begin and end with an alphanumeric character<br />([a-z0-9A-Z]), with dashes (-), underscores (_), dots (.), and alphanumerics between.</td>
+        <td>None</td>
+        <td>False</td>
+    </tr>
 </table>
     [1] The least_time load balancing method is only available in NGINX Plus
 
 ### Annotation Descriptions 
 Two mandatory values that must be present for LBEX to serve traffic for the intended Kubernetes Service are `kubernetes.io/loadbalancer-class` and `loadbalancer.lbex/port`. Every other annotation has either a sensible default or is optional.
 
-<b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections.  The option to select leas time (lowest measured time) is supported, but can only be used with NGINX Plus.
+<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value of the service port.  The primary use of this value is to differentiate between two services that both utilized the same port which is standard Kubernetes supported behavior.  However, at the edge of the network, it is required that the ports (or IP address) be unique.  Optionally, LBEX can be run on as many servers (bare metal or virtual) as needed to provide the uniqueness at the interface / IP address level.  However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Spec itself.
+
+<b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections.  The option to select least time (lowest measured time) is supported, but can only be used with NGINX Plus.
 
 <b>loadbalancer.lbex/method</b> - Method is a supplemental argument to the least_time directive.  Similarly, it is supported in LBEX but requires NGINX Plus to function.  See reference: [least_time](http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#least_time).
 
@@ -141,11 +149,13 @@ The final two annotations are only read if, and only if, `loadbalancer.lbex/upst
 
 <b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or its' `external` public IP address. 
 
+<b>loadbalancer.lbex/service-pool</b> - No Default.  Service pools can provide a mapping from any abstract partition to the pool of LBEX instances that provide traffic handling for that partition.  If the Service Specification defines the `service-pool` annotation, then LBEX will serve traffic for the Service if, and only if, the LBEX instance is a member of that service pool (as determined by the flag `--service-pool` defined below - see [Running LBEX](##running-lbex)).  Note that any service that does not define the `service-pool` annotation will continue to have traffic managed by all available instances of LBEX.
+
 ### Annotation Selection
 It is incumbent on the service designer to make sensible selections for annotation values.  For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with external IP addresses.  It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, 2) LBEX is not running as a Pod inside the Kubernetes the cluster.  By definition a cluster IP address is only accessible to members of the cluster.
 
 ## Using LBEX Example - Revisited
-Returning to the pervious example, here is the updated version that takes advantage of the default values for all but the one required annotation.  As before, the following Service Specification would configure LBEX for the NTP Service. 
+Returning to the pervious example, here is the updated version that takes advantage of the default values for all but the two required annotations.  As before, the following Service Specification would configure LBEX for the NTP Service. 
 ```
 apiVersion: v1
 kind: Service
@@ -235,14 +245,15 @@ As noted [above](##overview), LBEX can run as either a container image under a c
 $ ./lbex --help
 Usage of ./lbex:
       --alsologtostderr                  log to standard error as well as files
-      --health-check                     Enable lbex-only health check (default true)
-      --health-port int                  Lbex health check port (default 7331)
+      --health-check                     Enable health checking for LBEX (default true)
+      --health-port int                  health check service port (default 7331)
       --kubeconfig string                absolute path to the kubeconfig file
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
       --proxy string                     kubctl proxy server running at the given url
-      --service-name string              Provide Load Balancing for the specified service.
+      --service-name string              Provide load balancing for the specified service - ONLY.
+      --service-pool string              Provide load balancing for services in the specified pool, and services for which no pool is specified.
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
   -v, --v Level                          log level for V logs
       --version                          Display version info
@@ -254,6 +265,7 @@ Without going in to an explanation of all of the parameters, many of which shoul
 <b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.
 <b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).
 <b>--service-name</b> - Provide load balancing for service identified by the flag *only*.  
+<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value, or for services that do not define a pool.  
 
 Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running.  For example:
 ```
