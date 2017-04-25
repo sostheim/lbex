@@ -32,6 +32,9 @@ const (
 	// LBEXClassKeyValue - this controller only processes Services with this annotation.
 	LBEXClassKeyValue = "loadbalancer-lbex"
 
+	// LBEXPortKey - external port for the service
+	LBEXPortKey = "loadbalancer.lbex/port"
+
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
 
@@ -175,8 +178,10 @@ func GetOptionalIntAnnotation(name string, obj interface{}) (int, bool) {
 }
 
 // IsValid returns true if the given Service object specifies 'lbex' as the
-// value to the loadbalancer.class annotation.
+// value to the loadbalancer.class annotation and has a valid port specified through
+// the loadbalancer.lbex/port annnotation
 func IsValid(obj interface{}) bool {
 	class, _ := GetOptionalStringAnnotation(LBEXClassKey, obj)
-	return class == LBEXClassKeyValue
+	port, _ := GetOptionalIntAnnotation(LBEXPortKey, obj)
+	return (class == LBEXClassKeyValue) && (port != 0)
 }
