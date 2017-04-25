@@ -63,12 +63,15 @@ type lbExController struct {
 	// The service to provide load balancing for, or "all" if empty
 	service string
 
+	// The affinity selector to provide load balancing for, or "all" if empty
+	pool string
+
 	stopCh chan struct{}
 
 	cfgtor *nginx.Configurator
 }
 
-func newLbExController(clientset *kubernetes.Clientset, service *string, healthCheck bool, healthPort int) *lbExController {
+func newLbExController(clientset *kubernetes.Clientset, service *string, pool *string, healthCheck bool, healthPort int) *lbExController {
 	// local testing -> no actual NGINX instance
 	cfgType := nginx.StreamCfg
 	if runtime.GOOS == "darwin" {
@@ -86,6 +89,7 @@ func newLbExController(clientset *kubernetes.Clientset, service *string, healthC
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
 		service:   *service,
+		pool:      *pool,
 		cfgtor:    configtor,
 	}
 	lbexc.nodesQueue = NewTaskQueue(lbexc.syncNodes)
@@ -401,6 +405,18 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	if lbex.service != "" && lbex.service != serviceName {
 		glog.V(3).Infof("getService: ignoring non-matching service name: %s", serviceName)
 		return nil
+	}
+
+	if lbex.pool != "" {
+		if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXPoolKey, service); ok {
+			if val != "" && lbex.pool != val {
+				// Only if a pool selector value is present, and it does not match, then we eliminate
+				// the service from the topology
+				glog.V(3).Infof("getService: ignoring pool selector: %s, service pool: %s, name: %s",
+					lbex.pool, val, serviceName)
+				return nil
+			}
+		}
 	}
 
 	var host string

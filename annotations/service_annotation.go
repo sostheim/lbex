@@ -52,6 +52,9 @@ const (
 
 	// LBEXNodeSet - set of nodes to load balance across
 	LBEXNodeSet = "loadbalancer.lbex/node-set"
+
+	// LBEXPoolKey - service affinity pool key
+	LBEXPoolKey = "loadbalancer.lbex/service-pool"
 )
 
 // serviceAnnotations - map of key:value annotations discoverd for LBEX

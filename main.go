@@ -40,6 +40,7 @@ var (
 	kubeconfig      = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	proxy           = flag.String("proxy", "", "kubctl proxy server running at the given url")
 	serviceName     = flag.String("service-name", "", "Provide load balancing for the specified service - ONLY.")
+	servicePool     = flag.String("service-pool", "", "Provide load balancing for services in the specified pool, and services for which no pool is specified.")
 	version         = flag.Bool("version", false, "Display version info")
 	healthCheck     = flag.Bool("health-check", true, "Enable health checking for LBEX (default true)")
 	healthCheckPort = flag.Int("health-port", 7331, "health check service port (default 7331)")
@@ -123,7 +124,7 @@ func main() {
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	lbex := newLbExController(clientset, serviceName, *healthCheck, *healthCheckPort)
+	lbex := newLbExController(clientset, serviceName, servicePool, *healthCheck, *healthCheckPort)
 	lbex.run()
 
 	for {
