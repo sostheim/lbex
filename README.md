@@ -123,7 +123,7 @@ The annotations defined for LBEX are as follows:
     </tr>
     <tr>
         <td>loadbalancer.lbex/service-pool</td>
-        <td>Must be 1-63 characters, and begin and end with an alphanumeric character<br />([a-z0-9A-Z]), with dashes (-), underscores (_), dots (.), and alphanumerics between.</td>
+        <td>Must be 1-63 characters, and begin and end with an alphanumeric character([a-z0-9A-Z]), with dashes (-), underscores (_), dots (.), and alphanumerics between.</td>
         <td>None</td>
         <td>False</td>
     </tr>
@@ -260,12 +260,12 @@ Usage of ./lbex:
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
 ```
 Without going in to an explanation of all of the parameters, many of which should have sufficient explanation in the help provided, of particular interest to controlling the operation of LBEX are the following:
-<b>--health-check</b> - Defaults to true, but may be disabled by passing a value of false.  Allows external service monitors to check the health of 'lbex' itself.  
-<b>--health-port</b> - Defaults to 7331, but may be set to any valid port number value.
-<b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.
-<b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).
-<b>--service-name</b> - Provide load balancing for service identified by the flag *only*.  
-<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value, or for services that do not define a pool.  
+<b>--health-check</b> - Defaults to true, but may be disabled by passing a value of false.  Allows external service monitors to check the health of 'lbex' itself.<br />
+<b>--health-port</b> - Defaults to 7331, but may be set to any valid port number value.<br />
+<b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.<br />
+<b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).<br />
+<b>--service-name</b> - Provide load balancing for service identified by the flag *only*.<br />
+<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value, or for services that do not define a pool.<br />
 
 Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running.  For example:
 ```
@@ -281,7 +281,9 @@ There is an implied default not noted here that relates to accessing the Kuberne
 
 Also implied in the ordering above is that only one attempt is made to access the cluster.  Regardless of which method is used, it is the only method attempted.  If the selected method fails, then LBEX terminates immediately without attempting any other access.  Therefore, it is unnecessary to specify more than one access method.
 
-Finally, the `--service-name` option, allows us to provide a 1:1 mapping of load balancer's to services, should we desire to do so.  The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX regardless of wether or not they supply the identifying annotation.  
+The `--service-name` option allows us to provide a 1:1 mapping of load balancer's to services, should we desire to do so.  The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX regardless of wether or not they supply the identifying annotation.  
+
+The `--service-pool` option allows us to provide affinity to an abstract mapping.  For example, you could specify `--service-pool=web-server` as means to indicate that all Kubernetes Services that define the 'loadbalancer.lbex/service-pool: web-server' annotation should be managed by this LBEX instance, and any others specifically allocated for that purpose  via this flag.  Note that, currently, this does not prevent LBEX from providing load balancing for services that define no affinity via the service pool annotation.
 
 ## Installation on Google Cloud
 
@@ -331,7 +333,7 @@ For example, given a GKE cluster named `mycluster` with primary zone of `us-cent
   --cluster-zone us-central1-a \
   --cluster-network mynetwork 
 ```
-This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, auto-heal based on lbex health check at default port `7331`; with CIDR `10.150.0.0/28`, monitoring the API server of GKE cluster `mycluster` for services to proivde external load balancing for.
+This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, auto-heal based on lbex health check at default port `7331`; with CIDR `10.150.0.0/28`, monitoring the API server of GKE cluster `mycluster` for services to provide external load balancing for.
 
 ## Motivation
 A very specific use case arises for Google Container Engine (GKE) base Kubernetes services that require an external load balancer, but not a public IP address.  That is, services that need to be exposed to RFC1918 address spaces, but that address space is neither part of the Cluster's IP address space, or the [GCP Subnet Network](https://cloud.google.com/compute/docs/networking#subnet_network) Auto [IP Ranges](https://cloud.google.com/compute/docs/networking#ip_ranges).  This is particularly challenging when connecting to GCP via [Google Cloud VPN](https://cloud.google.com/compute/docs/vpn/overview), where the on premise peer network side of the VPN is also an RFC1918 10/8 network space.  This configuration, in and of itself, presents certain challenges described here: [GCI IP Tables Configuration](https://github.com/samsung-cnct/gci-iptables-conf-agent).   Once the two networks are interconnected, there is still the issue of communicating with the GCP region's private IP subnet range, and further being able to reach exposed Kubernetes services in the Kubernetes Cluster CIDR range.
