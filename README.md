@@ -35,6 +35,7 @@ metadata:
     version: 1.0.0
   annotations:
     kubernetes.io/loadbalancer-class: loadbalancer-lbex
+    loadbalancer.lbex/port: 321
     loadbalancer.lbex/algorithm: round_robin
     loadbalancer.lbex/upstream-type: node
     loadbalancer.lbex/node-set: host
@@ -52,9 +53,10 @@ spec:
 
 ### How It Works
 Everything should look very familiar with one obvious exception.  There is nothing out of the ordinary here with respect to the service specification, aside from the metadata object's annotations.  The annotations shown are primarily for illustration purposes (we'll discuss annotations in more detail next).  The annotations shown here have the effect of defining:
-- an NGINX load balancer that accepts incoming traffic on UDP port 123
+- an NGINX load balancer that accepts incoming traffic on UDP port 321
 - distributes network traffic, round robin, to all Pods running the NTP service
 - network traffic is delivered to the worker node's UDP node port 30123
+- service port internal to the cluster is still 123
 
 An important consideration is that the LBEX is supplemental to any other load balancers currently in existence in the cluster.  Significantly, this in no way affects the native Kubernetes `kube-proxy` based `iptables` load balancing.  Less obvious may be the fact that any other load balancer defined for a service can operate in parallel with very limited restrictions.  
 
@@ -74,6 +76,12 @@ The annotations defined for LBEX are as follows:
     <tr>
         <td>kubernetes.io/loadbalancer-class</td>
         <td>loadbalancer-lbex</td>
+        <td>None</td>
+        <td>True</td>
+    </tr>
+    <tr>
+        <td>loadbalancer.lbex/port</td>
+        <td>valid TCP/UDP port number (1 to 65535)</td>
         <td>None</td>
         <td>True</td>
     </tr>
@@ -117,7 +125,7 @@ The annotations defined for LBEX are as follows:
     [1] The least_time load balancing method is only available in NGINX Plus
 
 ### Annotation Descriptions 
-The only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  Every other annotation has either a sensible default or is optional.
+Two mandatory values that must be present for LBEX to serve traffic for the intended Kubernetes Service are `kubernetes.io/loadbalancer-class` and `loadbalancer.lbex/port`. Every other annotation has either a sensible default or is optional.
 
 <b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections.  The option to select leas time (lowest measured time) is supported, but can only be used with NGINX Plus.
 
@@ -149,6 +157,7 @@ metadata:
     version: 1.0.0
   annotations:
     kubernetes.io/loadbalancer-class: loadbalancer-lbex
+    loadbalancer.lbex/port: 321
  spec:
   type: NodePort
   selector: 
