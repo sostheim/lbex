@@ -9,7 +9,7 @@ In general, LBEX provides the ability to:
 - Service network traffic on any Linux distribution that supports the installation of NGINX, running:
     -  on Bare Metal, as a container image or static binary
     -  on a Cloud Instance, as a container image or static binary
-    -  Running as a Kubernetes managed Deployment, as a container image defined in a [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) [Spec](https://kubernetes.io/docs/api-reference/v1.6/#pod-v1-core)      
+    -  as a Kubernetes managed Deployment, as a container image defined in a [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) [Spec](https://kubernetes.io/docs/api-reference/v1.6/#pod-v1-core)      
 - Proxy/Load Balance traffic to: 
     - A Kubernetes ClusterIP Address and ServicePort
     - A Kubernetes Pod IP Address and Port
@@ -52,7 +52,7 @@ spec:
 ```
 
 ### How It Works
-The preceding Service Specification is nothing out of the ordinary beside from the metadata object's annotations. Annotations are discussed below. Here, they are shown are primarily for illustration purposes, and have the effect of defining:
+The preceding Service Specification is nothing out of the ordinary beside from the metadata object's annotations. Annotations are discussed below. Here, they are shown primarily for illustration purposes, and have the effect of defining:
 - an NGINX load balancer that accepts incoming traffic on UDP port 321
 - distributes network traffic, round robin, to all Pods running the NTP service
 - network traffic is delivered to the worker node's UDP node port 30123
@@ -65,7 +65,7 @@ As a final note, it is very likely that a significant portion of the NGINX serve
 ## Annotations
 Kubernetes [Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) currently play a central role in defining how LBEX is used.  Ideally this configuration data will be migrated to Kubernetes [ConfigMaps](https://kubernetes.io/docs/user-guide/configmap/) soon.  When, and if, that happens support will be provided for all existing annotations for several subsequent versions.
 ### Annotation Definitions 
-The following annotations defined for LBEX:
+The following annotations are defined for LBEX:
 <table border="1">
     <tr>
         <th>Annotations</th>
@@ -281,9 +281,9 @@ There is an implied default not noted here that relates to accessing the Kuberne
 
 Also implied in the ordering above is that only one attempt is made to access the cluster. Regardless of which method is used, it is the only method attempted. If the selected method fails, then LBEX terminates immediately without attempting any other access. Therefore, it is unnecessary to specify more than one access method.
 
-The `--service-name` option allows you to provide a 1:1 mapping of load balancers to services, should we desire to do so. The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX, whether or not they supply the identifying annotation.  
+The `--service-name` option allows you to provide a 1:1 mapping of load balancers to services, should you desire to do so. The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX, whether or not they supply the identifying annotation.  
 
-The `--service-pool` option allows you to provide affinity to an abstract mapping. For example, you could specify `--service-pool=web-server` to indicate that all Kubernetes Services that define the 'loadbalancer.lbex/service-pool: web-server' annotation should be managed by this LBEX instance, and any others specifically allocated for that purpose via this flag.  Note that, currently, this does not prevent LBEX from providing load balancing for services that define no affinity via the service pool annotation. A planned `--strict-service-pool` option will allow LBEX to *only* manage traffic if the annotation is found.
+The `--service-pool` option allows you to provide affinity to an abstract mapping. For example, you could specify `--service-pool=web-server` to indicate that all Kubernetes Services that define the 'loadbalancer.lbex/service-pool: web-server' annotation should be managed by this LBEX instance, and any others specifically allocated for that purpose via this flag.  Note that, currently, this does not prevent LBEX from providing load balancing for services that define no affinity via the service pool annotation.
 
 ## Installation on Google Cloud
 
