@@ -83,7 +83,7 @@ The following annotations are defined for LBEX:
         <td>loadbalancer.lbex/port</td>
         <td>valid TCP/UDP port number (1 to 65535)</td>
         <td>None</td>
-        <td>True</td>
+        <td>Conditional</td>
     </tr>
     <tr>
         <td>loadbalancer.lbex/algorithm</td>
@@ -133,7 +133,7 @@ The following annotations are defined for LBEX:
 ### Annotation Descriptions 
 Two mandatory values that must be present for LBEX to serve traffic for the intended Kubernetes Service are `kubernetes.io/loadbalancer-class` and `loadbalancer.lbex/port`. Every other annotation has either a sensible default or is optional.
 
-<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal or virtual) as needed to provide the uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Spec itself.
+<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal or virtual) as needed to provide the uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Spec itself.  Note: this behavior can be modified by the flag `--required-port`, defined below in the section [Running LBEX](##running-lbex).  If `--required-port=false` then this value can be ommited in the service spec. 
 
 <b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections. The option to select least time (lowest measured time) is supported, but can only be used with NGINX Plus.
 
@@ -196,6 +196,7 @@ Usage of ./lbex:
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
       --proxy string                     kubctl proxy server running at the given url
+      --require-port                     makes the Service Specification annotation "loadbalancer.lbex/port" required (default true)
       --service-name string              provide load balancing for the service-name - ONLY
       --service-pool string              provide load balancing for services in --service-pool
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
@@ -213,6 +214,7 @@ Without going in to an explanation of all of the parameters, many of which shoul
 <b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value based on the following conditions<br />
 <b>--strict-affinity</b> - Provide load balancing *only* for services that exactly match the value of --service-pool.<br />
 <b>--anti-affinity</b> - Provide load balancing *only* for services that *do not*  match the value of --service-pool.<br />
+<b>--require-port</b> - Makes the annotation "loadbalancer.lbex/port" required (true), or optional (false).<br />
 
 Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running. For example:
 ```
