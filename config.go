@@ -32,6 +32,7 @@ type config struct {
 	version         *bool
 	healthCheck     *bool
 	healthCheckPort *int
+	requirePort     *bool
 }
 
 func newConfig() *config {
@@ -45,12 +46,13 @@ func newConfig() *config {
 		version:         flag.Bool("version", false, "display version info and exit"),
 		healthCheck:     flag.Bool("health-check", true, "enable health checking for LBEX"),
 		healthCheckPort: flag.Int("health-port", 7331, "health check service port"),
+		requirePort:     flag.Bool("require-port", true, "makes the Service Specification annotation \"loadbalancer.lbex/port\" required or optional"),
 	}
 }
 
 func (cfg *config) String() string {
-	return fmt.Sprintf("kubeconfig: %s, proxy: %s, service-name: %s, service-pool: %s, "+
-		"strict-affinity: %t, anti-affinity: %t, health-check: %t, health-check-port: %d",
+	return fmt.Sprintf("kubeconfig: %s, proxy: %s, service-name: %s, service-pool: %s, strict-affinity: %t, "+
+		"anti-affinity: %t, health-check: %t, health-check-port: %d, require-port: %t",
 		*cfg.kubeconfig, *cfg.proxy, *cfg.serviceName, *cfg.servicePool, *cfg.strictAffinity,
-		*cfg.antiAffinity, *cfg.healthCheck, *cfg.healthCheckPort)
+		*cfg.antiAffinity, *cfg.healthCheck, *cfg.healthCheckPort, *cfg.requirePort)
 }
