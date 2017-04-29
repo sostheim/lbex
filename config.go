@@ -46,7 +46,7 @@ func newConfig() *config {
 		version:         flag.Bool("version", false, "display version info and exit"),
 		healthCheck:     flag.Bool("health-check", true, "enable health checking for LBEX"),
 		healthCheckPort: flag.Int("health-port", 7331, "health check service port"),
-		requirePort:     flag.Bool("require-port", true, "makes the Service Specification annotation \"loadbalancer.lbex/port\" required or optional"),
+		requirePort:     flag.Bool("require-port", true, "makes the Service Specification annotation \"loadbalancer.lbex/port\" required"),
 	}
 }
 
