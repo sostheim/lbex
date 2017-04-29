@@ -16,13 +16,19 @@ limitations under the License.
 
 package main
 
-import flag "github.com/spf13/pflag"
+import (
+	"fmt"
+
+	flag "github.com/spf13/pflag"
+)
 
 type config struct {
 	kubeconfig      *string
 	proxy           *string
 	serviceName     *string
 	servicePool     *string
+	strictAffinity  *bool
+	antiAffinity    *bool
 	version         *bool
 	healthCheck     *bool
 	healthCheckPort *int
@@ -32,10 +38,19 @@ func newConfig() *config {
 	return &config{
 		kubeconfig:      flag.String("kubeconfig", "", "absolute path to the kubeconfig file"),
 		proxy:           flag.String("proxy", "", "kubctl proxy server running at the given url"),
-		serviceName:     flag.String("service-name", "", "Provide load balancing for the specified service - ONLY."),
-		servicePool:     flag.String("service-pool", "", "Provide load balancing for services in the specified pool, and services for which no pool is specified."),
-		version:         flag.Bool("version", false, "Display version info"),
-		healthCheck:     flag.Bool("health-check", true, "Enable health checking for LBEX (default true)"),
-		healthCheckPort: flag.Int("health-port", 7331, "health check service port (default 7331)"),
+		serviceName:     flag.String("service-name", "", "provide load balancing for the service-name - ONLY"),
+		servicePool:     flag.String("service-pool", "", "provide load balancing for services in --service-pool"),
+		strictAffinity:  flag.Bool("strict-affinity", false, "provide load balancing for services in --service-pool ONLY"),
+		antiAffinity:    flag.Bool("anti-affinity", false, "do not provide load balancing for services in --service-pool"),
+		version:         flag.Bool("version", false, "display version info and exit"),
+		healthCheck:     flag.Bool("health-check", true, "enable health checking for LBEX"),
+		healthCheckPort: flag.Int("health-port", 7331, "health check service port"),
 	}
+}
+
+func (cfg *config) String() string {
+	return fmt.Sprintf("kubeconfig: %s, proxy: %s, service-name: %s, service-pool: %s, "+
+		"strict-affinity: %t, anti-affinity: %t, health-check: %t, health-check-port: %d",
+		*cfg.kubeconfig, *cfg.proxy, *cfg.serviceName, *cfg.servicePool, *cfg.strictAffinity,
+		*cfg.antiAffinity, *cfg.healthCheck, *cfg.healthCheckPort)
 }

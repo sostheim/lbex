@@ -403,16 +403,15 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 		return nil
 	}
 
-	if *lbex.cfg.servicePool != "" {
-		if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXPoolKey, service); ok {
-			if val != "" && *lbex.cfg.servicePool != val {
-				// Only if a pool selector value is present, and it does not match, then we eliminate
-				// the service from the topology
-				glog.V(3).Infof("getService: ignoring service: %s, with pool selector: %s, does not match LBEX pool: %s",
-					serviceName, val, *lbex.cfg.servicePool)
-				return nil
-			}
-		}
+	var pool string
+	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXPoolKey, service); ok {
+		pool = val
+	}
+
+	if lbex.checkAffinity(pool) == false {
+		glog.V(3).Infof("getService: service: %s, with pool selector: %s eliminate by affinity check",
+			serviceName, pool)
+		return nil
 	}
 
 	var host string
@@ -445,4 +444,28 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	sort.Sort(serviceByName(targets))
 
 	return
+}
+
+// checkAffinity returns true or false depending on wether the affinity or
+// anti-affinity rules are satisfied.
+func (lbex *lbExController) checkAffinity(pool string) bool {
+
+	if *lbex.cfg.strictAffinity {
+		// intentionally checks for "" == "": strict affinity to no pool value
+		glog.V(4).Infof("strict affnity pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+		return pool == *lbex.cfg.servicePool
+	}
+
+	if *lbex.cfg.antiAffinity {
+		// intentionally checks for "" != "": anti-affinity to no pool value
+		glog.V(4).Infof("anti affnity pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+		return pool != *lbex.cfg.servicePool
+	}
+
+	if pool == "" {
+		return true
+	}
+
+	glog.V(4).Infof("pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+	return pool == *lbex.cfg.servicePool
 }
