@@ -41,18 +41,11 @@ var LbexType = "alpha"
 // LbexGitCommit - git commit sha-1 hash
 var LbexGitCommit string
 
-var (
-	kubeconfig      = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	proxy           = flag.String("proxy", "", "kubctl proxy server running at the given url")
-	serviceName     = flag.String("service-name", "", "Provide load balancing for the specified service - ONLY.")
-	servicePool     = flag.String("service-pool", "", "Provide load balancing for services in the specified pool, and services for which no pool is specified.")
-	version         = flag.Bool("version", false, "Display version info")
-	healthCheck     = flag.Bool("health-check", true, "Enable health checking for LBEX (default true)")
-	healthCheckPort = flag.Int("health-port", 7331, "health check service port (default 7331)")
-)
+var lbexCfg *config
 
 func init() {
 	go wait.Until(glog.Flush, 10*time.Second, wait.NeverStop)
+	lbexCfg = newConfig()
 }
 
 func addGV(config *rest.Config) {
@@ -73,7 +66,7 @@ func inCluster() *rest.Config {
 
 func external() *rest.Config {
 	glog.V(3).Infof("external(): creating config")
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	config, err := clientcmd.BuildConfigFromFlags("", *lbexCfg.kubeconfig)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -83,7 +76,7 @@ func external() *rest.Config {
 func byProxy() *rest.Config {
 	glog.V(3).Infof("byProxy(): creating config")
 	return &rest.Config{
-		Host: *proxy,
+		Host: *lbexCfg.proxy,
 	}
 }
 
@@ -100,7 +93,7 @@ func main() {
 	flag.Parse()
 
 	// check for version flag, if present print veriosn and exit
-	if *version {
+	if *lbexCfg.version {
 		displayVersion()
 		return
 	}
@@ -111,9 +104,9 @@ func main() {
 	//     note: this will fail with the appropriate error messages
 	//           if not actually executing on a node in the cluster.
 	var config *rest.Config
-	if *proxy != "" {
+	if *lbexCfg.proxy != "" {
 		config = byProxy()
-	} else if *kubeconfig != "" {
+	} else if *lbexCfg.kubeconfig != "" {
 		config = external()
 	} else {
 		config = inCluster()
@@ -129,7 +122,7 @@ func main() {
 
 	// services/endpoint controller
 	glog.V(3).Infof("main(): staring controllers")
-	lbex := newLbExController(clientset, serviceName, servicePool, *healthCheck, *healthCheckPort)
+	lbex := newLbExController(clientset, lbexCfg)
 	lbex.run()
 
 	for {

@@ -125,7 +125,7 @@ The following annotations are defined for LBEX:
         <td>loadbalancer.lbex/service-pool</td>
         <td>Must be 1-63 characters, and begin and end with an alphanumeric character([a-z0-9A-Z]), with dashes (-), underscores (_), dots (.), and alphanumerics between.</td>
         <td>None</td>
-        <td>False</td>
+        <td>Conditional</td>
     </tr>
 </table>
     [1] The least_time load balancing method is only available in NGINX Plus
@@ -149,7 +149,7 @@ The final two annotations are only read if, and only if, `loadbalancer.lbex/upst
 
 <b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or its' `external` public IP address. 
 
-<b>loadbalancer.lbex/service-pool</b> - No Default.  Service pools can provide a mapping from any abstract partition to the pool of LBEX instances that provide traffic handling for that partition.  If the Service Specification defines the `service-pool` annotation, then LBEX will serve traffic for the Service if, and only if, the LBEX instance is a member of that service pool (as determined by the flag `--service-pool` defined below - see [Running LBEX](##running-lbex)). Note that any service that does not define the `service-pool` annotation will continue to have traffic managed by all available instances of LBEX.
+<b>loadbalancer.lbex/service-pool</b> - No Default.  Service pools can provide a mapping from any abstract partition to a pool of LBEX instances that provide traffic handling for the partition.  If the Service Specification defines the `service-pool` annotation, then LBEX will serve traffic for the service if the LBEX instance is a member of that service pool.  Note: this behavior can be modified by the flags `--strict-affinity` and `--anti-affinity` defined below in the section [Running LBEX](##running-lbex). 
 
 ### Annotation Selection
 It is incumbent on the service designer to make sensible selections for annotation values. For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with external IP addresses. It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, or 2) LBEX is not running as a Pod inside the Kubernetes the cluster. By definition a cluster IP address is only accessible to members of the cluster.
@@ -181,63 +181,6 @@ metadata:
 
 So, by taking advantage of several sensible defaults, the service's definition is exactly as it would be were it not using LBEX aside from the addition of a one line annotation.
 
-## NGINX Prerequisites
-
-For TCP and UDP load balancing to work, the NGINX image must be built with the `--with-stream` configuration flag to load/enable the required stream processing modules. In most cases the [NGINX Official Repository](https://hub.docker.com/_/nginx/) 'latest' tagged image will include the stream modules by default. The easiest way to be certain that the modules are included is to dump the configuration and check for their presence.
-
-For example, running the following command against the `nginx:latest` image shows the following (line breaks added for clarity):
-
-    $ docker run -t nginx:latest nginx -V
-    nginx version: nginx/1.11.10
-    built by gcc 4.9.2 (Debian 4.9.2-10) 
-    built with OpenSSL 1.0.1t  3 May 2016
-    TLS SNI support enabled
-    configure arguments: --prefix=/etc/nginx 
-                --sbin-path=/usr/sbin/nginx 
-                --modules-path=/usr/lib/nginx/modules 
-                --conf-path=/etc/nginx/nginx.conf 
-                --error-log-path=/var/log/nginx/error.log 
-                --http-log-path=/var/log/nginx/access.log 
-                --pid-path=/var/run/nginx.pid 
-                --lock-path=/var/run/nginx.lock 
-                --http-client-body-temp-path=/var/cache/nginx/client_temp 
-                --http-proxy-temp-path=/var/cache/nginx/proxy_temp 
-                --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp 
-                --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp 
-                --http-scgi-temp-path=/var/cache/nginx/scgi_temp 
-                --user=nginx 
-                --group=nginx 
-                --with-compat 
-                --with-file-aio 
-                --with-threads 
-                --with-http_addition_module 
-                --with-http_auth_request_module 
-                --with-http_dav_module 
-                --with-http_flv_module 
-                --with-http_gunzip_module 
-                --with-http_gzip_static_module 
-                --with-http_mp4_module 
-                --with-http_random_index_module 
-                --with-http_realip_module 
-                --with-http_secure_link_module 
-                --with-http_slice_module 
-                --with-http_ssl_module 
-                --with-http_stub_status_module 
-                --with-http_sub_module 
-                --with-http_v2_module 
-                --with-mail 
-                --with-mail_ssl_module 
-                --with-stream 
-                --with-stream_realip_module 
-                --with-stream_ssl_module 
-                --with-stream_ssl_preread_module 
-                --with-cc-opt='-g -O2 -fstack-protector-strong -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC' 
-                --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,
-                --as-needed -pie'
-
-As you can see several stream modules are included in the NGINX build configuration. 
-
-
 ## Running LBEX
 As noted [above](##overview), LBEX can run as either a container image under a container runtime, or in a Kubernetes Pod. Regardless of the runtime environment, LBEX has a number of command line options that define how it operates.
 
@@ -245,18 +188,20 @@ As noted [above](##overview), LBEX can run as either a container image under a c
 $ ./lbex --help
 Usage of ./lbex:
       --alsologtostderr                  log to standard error as well as files
-      --health-check                     Enable health checking for LBEX (default true)
+      --anti-affinity                    do not provide load balancing for services in --service-pool
+      --health-check                     enable health checking for LBEX (default true)
       --health-port int                  health check service port (default 7331)
       --kubeconfig string                absolute path to the kubeconfig file
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
       --proxy string                     kubctl proxy server running at the given url
-      --service-name string              Provide load balancing for the specified service - ONLY.
-      --service-pool string              Provide load balancing for services in the specified pool, and services for which no pool is specified.
+      --service-name string              provide load balancing for the service-name - ONLY
+      --service-pool string              provide load balancing for services in --service-pool
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
+      --strict-affinity                  provide load balancing for services in --service-pool ONLY
   -v, --v Level                          log level for V logs
-      --version                          Display version info
+      --version                          display version info and exit
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
 ```
 Without going in to an explanation of all of the parameters, many of which should have sufficient explanation in the help provided, of particular interest to controlling the operation of LBEX are the following:
@@ -265,7 +210,9 @@ Without going in to an explanation of all of the parameters, many of which shoul
 <b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.<br />
 <b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).<br />
 <b>--service-name</b> - Provide load balancing *only* for the specified service.<br />
-<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value, or for services that do not define a pool.<br />
+<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value based on the following conditions<br />
+<b>--strict-affinity</b> - Provide load balancing *only* for services that exactly match the value of --service-pool.<br />
+<b>--anti-affinity</b> - Provide load balancing *only* for services that *do not*  match the value of --service-pool.<br />
 
 Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running. For example:
 ```
@@ -334,6 +281,62 @@ For example, given a GKE cluster named `mycluster` with primary zone of `us-cent
   --cluster-network mynetwork 
 ```
 This will create an autoscaling managed instance group in `us-central1`, that will scale to max `10`, minimum `2` instances, auto-heal based on lbex health check at default port `7331` and with CIDR `10.150.0.0/28`. It will monitor the API server of GKE cluster `mycluster` for services for which it will provide external load balancing.
+
+## NGINX Prerequisites
+
+For TCP and UDP load balancing to work, the NGINX image must be built with the `--with-stream` configuration flag to load/enable the required stream processing modules. In most cases the [NGINX Official Repository](https://hub.docker.com/_/nginx/) 'latest' tagged image will include the stream modules by default. The easiest way to be certain that the modules are included is to dump the configuration and check for their presence.
+
+For example, running the following command against the `nginx:latest` image shows the following (line breaks added for clarity):
+
+    $ docker run -t nginx:latest nginx -V
+    nginx version: nginx/1.11.10
+    built by gcc 4.9.2 (Debian 4.9.2-10) 
+    built with OpenSSL 1.0.1t  3 May 2016
+    TLS SNI support enabled
+    configure arguments: --prefix=/etc/nginx 
+                --sbin-path=/usr/sbin/nginx 
+                --modules-path=/usr/lib/nginx/modules 
+                --conf-path=/etc/nginx/nginx.conf 
+                --error-log-path=/var/log/nginx/error.log 
+                --http-log-path=/var/log/nginx/access.log 
+                --pid-path=/var/run/nginx.pid 
+                --lock-path=/var/run/nginx.lock 
+                --http-client-body-temp-path=/var/cache/nginx/client_temp 
+                --http-proxy-temp-path=/var/cache/nginx/proxy_temp 
+                --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp 
+                --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp 
+                --http-scgi-temp-path=/var/cache/nginx/scgi_temp 
+                --user=nginx 
+                --group=nginx 
+                --with-compat 
+                --with-file-aio 
+                --with-threads 
+                --with-http_addition_module 
+                --with-http_auth_request_module 
+                --with-http_dav_module 
+                --with-http_flv_module 
+                --with-http_gunzip_module 
+                --with-http_gzip_static_module 
+                --with-http_mp4_module 
+                --with-http_random_index_module 
+                --with-http_realip_module 
+                --with-http_secure_link_module 
+                --with-http_slice_module 
+                --with-http_ssl_module 
+                --with-http_stub_status_module 
+                --with-http_sub_module 
+                --with-http_v2_module 
+                --with-mail 
+                --with-mail_ssl_module 
+                --with-stream 
+                --with-stream_realip_module 
+                --with-stream_ssl_module 
+                --with-stream_ssl_preread_module 
+                --with-cc-opt='-g -O2 -fstack-protector-strong -Wformat -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -fPIC' 
+                --with-ld-opt='-Wl,-z,relro -Wl,-z,now -Wl,
+                --as-needed -pie'
+
+As you can see several stream modules are included in the NGINX build configuration. 
 
 ## Motivation
 A very specific use case arises for Google Container Engine (GKE) based Kubernetes services that require an external load balancer, but not a public IP address. These services need to be exposed to RFC1918 address spaces, but that address space is neither part of the Cluster's IP address space, or the [GCP Subnet Network](https://cloud.google.com/compute/docs/networking#subnet_network) Auto [IP Ranges](https://cloud.google.com/compute/docs/networking#ip_ranges). This is particularly challenging when connecting to GCP via [Google Cloud VPN](https://cloud.google.com/compute/docs/vpn/overview), where the on premise peer network side of the VPN is also an RFC1918 10/8 network space. This configuration, in and of itself, presents certain challenges described here: [GCI IP Tables Configuration](https://github.com/samsung-cnct/gci-iptables-conf-agent). Once the two networks are interconnected, there remains the issue of communicating with the GCP region's private IP subnet range, and further being able to reach exposed Kubernetes services in the Kubernetes Cluster CIDR range.

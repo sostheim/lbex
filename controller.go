@@ -46,6 +46,9 @@ type lwController struct {
 
 // External LB Controller (lbex)
 type lbExController struct {
+	// Command line / environment supplied configuration values
+	cfg *config
+
 	clientset *kubernetes.Clientset
 
 	endpointsLWC   *lwController
@@ -60,18 +63,12 @@ type lbExController struct {
 	nodesStore cache.Store
 	nodesQueue *TaskQueue
 
-	// The service to provide load balancing for, or "all" if empty
-	service string
-
-	// The affinity selector to provide load balancing for, or "all" if empty
-	pool string
-
 	stopCh chan struct{}
 
 	cfgtor *nginx.Configurator
 }
 
-func newLbExController(clientset *kubernetes.Clientset, service *string, pool *string, healthCheck bool, healthPort int) *lbExController {
+func newLbExController(clientset *kubernetes.Clientset, cfg *config) *lbExController {
 	// local testing -> no actual NGINX instance
 	cfgType := nginx.StreamCfg
 	if runtime.GOOS == "darwin" {
@@ -79,7 +76,7 @@ func newLbExController(clientset *kubernetes.Clientset, service *string, pool *s
 	}
 
 	// Create and start the NGINX LoadBalancer
-	ngxc, _ := nginx.NewNginxController(cfgType, "/etc/nginx/", healthCheck, healthPort)
+	ngxc, _ := nginx.NewNginxController(cfgType, "/etc/nginx/", *cfg.healthCheck, *cfg.healthCheckPort)
 	ngxc.Start()
 
 	configtor := nginx.NewConfigurator(ngxc)
@@ -88,8 +85,7 @@ func newLbExController(clientset *kubernetes.Clientset, service *string, pool *s
 	lbexc := lbExController{
 		clientset: clientset,
 		stopCh:    make(chan struct{}),
-		service:   *service,
-		pool:      *pool,
+		cfg:       cfg,
 		cfgtor:    configtor,
 	}
 	lbexc.nodesQueue = NewTaskQueue(lbexc.syncNodes)
@@ -402,21 +398,20 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	service, _ := obj.(*v1.Service)
 
 	serviceName, _ := GetServiceName(obj)
-	if lbex.service != "" && lbex.service != serviceName {
+	if *lbex.cfg.serviceName != "" && *lbex.cfg.serviceName != serviceName {
 		glog.V(3).Infof("getService: ignoring non-matching service name: %s", serviceName)
 		return nil
 	}
 
-	if lbex.pool != "" {
-		if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXPoolKey, service); ok {
-			if val != "" && lbex.pool != val {
-				// Only if a pool selector value is present, and it does not match, then we eliminate
-				// the service from the topology
-				glog.V(3).Infof("getService: ignoring pool selector: %s, service pool: %s, name: %s",
-					lbex.pool, val, serviceName)
-				return nil
-			}
-		}
+	var pool string
+	if val, ok := annotations.GetOptionalStringAnnotation(annotations.LBEXPoolKey, service); ok {
+		pool = val
+	}
+
+	if lbex.checkAffinity(pool) == false {
+		glog.V(3).Infof("getService: service: %s, with pool selector: %s eliminate by affinity check",
+			serviceName, pool)
+		return nil
 	}
 
 	var host string
@@ -449,4 +444,28 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	sort.Sort(serviceByName(targets))
 
 	return
+}
+
+// checkAffinity returns true or false depending on wether the affinity or
+// anti-affinity rules are satisfied.
+func (lbex *lbExController) checkAffinity(pool string) bool {
+
+	if *lbex.cfg.strictAffinity {
+		// intentionally checks for "" == "": strict affinity to no pool value
+		glog.V(4).Infof("strict affnity pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+		return pool == *lbex.cfg.servicePool
+	}
+
+	if *lbex.cfg.antiAffinity {
+		// intentionally checks for "" != "": anti-affinity to no pool value
+		glog.V(4).Infof("anti affnity pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+		return pool != *lbex.cfg.servicePool
+	}
+
+	if pool == "" {
+		return true
+	}
+
+	glog.V(4).Infof("pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
+	return pool == *lbex.cfg.servicePool
 }
