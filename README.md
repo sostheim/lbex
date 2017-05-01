@@ -1,29 +1,85 @@
 # NGINX Based External Kubernetes Service Load Balancer
 ## Overview
 
-The Load Balancer External (LBEX) project was started to address a specific case where a Google Container Engine (GKE) based Kubernetes service required an external load balancer, but not a public IP address. This use case is described in detail below in this document. As work progressed on LBEX, some simple extensions were made it potentially useful for solving a larger set of problems.
-
-The solution is built around the Kubernetes 1.5+ release and the community version of NGINX. Providing support for both TCP and UDP protocols is a minimum requirement for being able to support general Kubernetes Services. NGINX is used due to its UDP load balancing capabilities.
-
-In general, LBEX provides the ability to:
-- Service network traffic on any Linux distribution that supports the installation of NGINX, running:
-    -  on Bare Metal, as a container image or static binary
-    -  on a Cloud Instance, as a container image or static binary
-    -  as a Kubernetes managed Deployment, as a container image defined in a [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/) [Spec](https://kubernetes.io/docs/api-reference/v1.6/#pod-v1-core)      
+The Load Balancer - External (LBEX) provides the ability to:
+- Service network traffic on any Linux distribution that supports the installation of [NGINX](http://nginx.org/en/), running:
+    -  on bare metal, as a container image or static binary
+    -  on a cloud instance, as a container image or static binary
+    -  on a Kubernetes cluster as a container image in a Pod   
 - Proxy/Load Balance traffic to: 
-    - A Kubernetes ClusterIP Address and ServicePort
+    - A Kubernetes worker host's IP Address and Node Port 
+        - If the node host is a cloud instance, lbex is capable of utilizing either the private or public IP anddress
     - A Kubernetes Pod IP Address and Port
-    - A Kubernetes worker host's IP Address and Node Port (including a cloud instance's private or public IP Address)
+    - A Kubernetes ClusterIP Address and ServicePort 
 
-Note that all of the NGINX configuration is managed by LBEX. The only requirement is that NGINX be installed and executable on the host operating system that LBEX will run on. The LBEX NGINX instance cannot be used for any other purpose. LBEX writes, and overwrites, all of NGINX's configuration files repeatedly during normal operation. As such it doesn't play well with any other configuration management system or human operators. 
+LBEX is built to use Kubernetes 1.5+, via the [client-go API](https://github.com/kubernetes/client-go), and the current [stable community version of NGINX](http://nginx.org/en/linux_packages.html#stable).  Providing load balancing / proxy support for both TCP and UDP traffic is a minimum requirement for general [Kubernetes Services](https://kubernetes.io/docs/concepts/services-networking/service/).  As such, NGINX is the logical choice for its' UDP load balancing capabilities.
 
-### Discussion
-A deployment of LBEX requires, at a minimum, network connectivity to both the Kubernetes API server and at least one destination address subnet. The API server can be accessed via `kubectl proxy` for development, but this is not recommended for production deployments. For normal operation, the standard access via the user's existing kubeconfig or the API Server's endpoint is supported. Network access must be available to at least one destination address space, either the ClusterIP Service IP address space, the Pod IP address space, or the host worker nodes' IP address space (public or private).
+### Connectivity
+A deployment of LBEX requires, at a minimum, network connectivity to both the Kubernetes API server and at least one destination address subnet. The API server can be accessed via `kubectl proxy` for development, but this is not recommended for production deployments. For normal operation, the standard access via [`kubeconfig`](https://kubernetes.io/docs/concepts/cluster-administration/authenticate-across-clusters-kubeconfig/) or the Kubernetes API Server endpoint is supported. Network access must be available to at least one destination address space, either the ClusterIP Service IP address space, the Pod IP address space, or the host worker nodes' IP address space (public or private).
 
 The LBEX application can run in any environment where some reasonable combination of access to these two resources is available.
 
+## Running LBEX
+All of the NGINX configuration is managed by LBEX. The only requirement is that NGINX be installed and executable on the host operating system that LBEX will run on. The LBEX NGINX instance cannot be used for any other purpose. LBEX writes, overwrites, and deletes all of NGINX's configuration files repeatedly during normal operation. As such it doesn't play well with any other configuration management system or human operators. 
+
+As noted [above](#overview), LBEX can run as a static binary, a container image under a container runtime, or in a Kubernetes [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod/). Regardless of the runtime environment, LBEX has a number of command line options that define how it operates.
+```
+$ ./lbex --help
+Usage of ./lbex:
+      --alsologtostderr                  log to standard error as well as files
+      --anti-affinity                    do not provide load balancing for services in --service-pool
+      --health-check                     enable health checking for LBEX (default true)
+      --health-port int                  health check service port (default 7331)
+      --kubeconfig string                absolute path to the kubeconfig file
+      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                   If non-empty, write log files in this directory
+      --logtostderr                      log to standard error instead of files
+      --proxy string                     kubctl proxy server running at the given url
+      --require-port                     makes the Service Specification annotation "loadbalancer.lbex/port" required (default true)
+      --service-name string              provide load balancing for the service-name - ONLY
+      --service-pool string              provide load balancing for services in --service-pool
+      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
+      --strict-affinity                  provide load balancing for services in --service-pool ONLY
+  -v, --v Level                          log level for V logs
+      --version                          display version info and exit
+      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
+```
+
+Without going in to an explanation of all of the parameters, many of which should have sufficient explanation in the help provided, of particular interest to controlling the operation of LBEX are the following:<br />
+<b>--health-check</b> - Defaults to true, but may be disabled by passing a value of false. Allows external service monitors to check the health of 'lbex' itself.<br />
+<b>--health-port</b> - Defaults to 7331, but may be set to any valid port number value.<br />
+<b>--kubeconfig</b> - Use the referenced kubeconfig for credentialed access to the cluster.<br />
+<b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).<br />
+<b>--service-name</b> - Provide load balancing *only* for the specified service.<br />
+<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value based on the following conditions<br />
+<b>--strict-affinity</b> - Provide load balancing *only* for services that exactly match the value of --service-pool.<br />
+<b>--anti-affinity</b> - Provide load balancing *only* for services that *do not*  match the value of --service-pool.<br />
+<b>--require-port</b> - Makes the annotation "loadbalancer.lbex/port" required (true), or optional (false).<br />
+
+Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running. For example:
+```
+$ curl http://10.150.0.2:7331/ -w "HTTP Response Code: %{http_code}\n"
+healthy
+HTTP Response Code: 200
+```
+
+There is an implied ordering to accessing the Kubernetes cluster. LBEX will attempt to establish credentialed cluster access via the following methods listed in priority order:
+1. If `--proxy string` is provided, use it; methods 2 and 3 are not attempted
+2. If `--kubeconfig string` is provided, use it; method 3 is not attempted
+3. If neither method is specified, then assume we are running inside a Kubernetes Pod and use the associated Service Account. See detailed information [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/.)
+
+Note above that only one attempt is made to access the cluster. Regardless of which method is used, it is the only method attempted. If the selected method fails, then LBEX terminates immediately without attempting any other access. Therefore, it is unnecessary to specify more than one access method.
+
+The `--service-name` option allows you to provide a 1:1 mapping of load balancers to services, should you desire to do so. The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX, regardless of whether or not they supply the requisite annotation.  
+
+The `--service-pool` option allows you to provide affinity to an abstract mapping. For example, you could specify `--service-pool=web-server` to indicate that all Kubernetes Services that define the `loadbalancer.lbex/service-pool: web-server` annotation should be managed by LBEX instance(s)that are designated via this flag/annotation affinity.  Note, this does not prevent LBEX from providing load balancing for other Kubernetes Services that define no affinity via the service pool annotation unless the `--strict-affinity` flag is also speified.
+
+The `--strict-affinity` option allows you to provide affinity for Kubernetes Services that are selected as described above for the `--service-pool` flag.  When this flag is set to true all services that don't strictly match are ignored. 
+
+The `--anti-affinity` option allows you to provide anti-affinity for Kubernetes Services that are not selected as described above for the `--service-pool` flag.  When this flag is set to true all services that strictly match are ignored. 
+
 ## Using LBEX Example
-The following is an example of deploying a Kubernetes service that uses LBEX for its external load balancer. Assume that our cluster provides an [NTP servers](https://en.wikipedia.org/wiki/Network_Time_Protocol) as a Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/). The example shown here is actually more verbose than necessary, but that's entirely for illustration. We'll revisit this example after a full discussion of Annotations. The following [Service](https://kubernetes.io/docs/concepts/services-networking/service/) [Specification](https://kubernetes.io/docs/api-reference/v1.6/#servicespec-v1-core) would configure LBEX for the NTP Service. 
+The following is an example of deploying a Kubernetes Service that uses LBEX for its external load balancer. Assume that our cluster provides an [NTP Service](https://en.wikipedia.org/wiki/Network_Time_Protocol) as a Kubernetes [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/). The example shown here is actually more verbose than necessary, but that's entirely for illustration. We'll revisit this example after a full discussion of Annotations. The following Kubernetes [Service](https://kubernetes.io/docs/concepts/services-networking/service/) [Specification](https://kubernetes.io/docs/api-reference/v1.6/#servicespec-v1-core) would configure LBEX for the NTP Service. 
 ```
 apiVersion: v1
 kind: Service
@@ -35,7 +91,7 @@ metadata:
     version: 1.0.0
   annotations:
     kubernetes.io/loadbalancer-class: loadbalancer-lbex
-    loadbalancer.lbex/port: 321
+    loadbalancer.lbex/port: 123
     loadbalancer.lbex/algorithm: round_robin
     loadbalancer.lbex/upstream-type: node
     loadbalancer.lbex/node-set: host
@@ -52,18 +108,18 @@ spec:
 ```
 
 ### How It Works
-The preceding Service Specification is nothing out of the ordinary beside from the metadata object's annotations. Annotations are discussed below. Here, they are shown primarily for illustration purposes, and have the effect of defining:
-- an NGINX load balancer that accepts incoming traffic on UDP port 321
+The preceding Service Specification contains nothing out of the ordinary aside from the metadata object's annotations. Annotations are discussed in detail in the next [section](#annotations). Here, they are shown primarily for illustration purposes, and have the effect of defining:
+- an NGINX load balancer that accepts incoming traffic on UDP port 123
 - distributes network traffic, round robin, to all Pods running the NTP service
 - network traffic is delivered to the worker node's UDP node port 30123
 - service port internal to the cluster is still 123
 
-An important consideration is that the LBEX is supplemental to any other load balancers currently in existence in the cluster. Significantly, LBEX in no way affects the native Kubernetes `kube-proxy` based `iptables` load balancing. A less obvious consequence is that any other load balancer defined for a service can operate in parallel with very limited restrictions.  
+LBEX is supplemental to any other load balancer(s) currently in existence in the cluster. Specifically, LBEX in no way affects the native Kubernetes `kube-proxy` based `iptables` load balancing. An intended consequence is that any other load balancer defined for a service can operate in parallel with little or no restrictions.  
 
-As a final note, it is very likely that a significant portion of the NGINX server configuration directives will eventually become available as configurable options via Kubernetes ConfigMaps in future releases.  
+As a final note, it is very likely that a significant portion of the popular NGINX server [configuration directives](http://nginx.org/en/docs/dirindex.html) will eventually become available as configurable options via Kubernetes ConfigMaps in future releases.  
 
 ## Annotations
-Kubernetes [Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) currently play a central role in defining how LBEX is used.  Ideally this configuration data will be migrated to Kubernetes [ConfigMaps](https://kubernetes.io/docs/user-guide/configmap/) soon.  When, and if, that happens support will be provided for all existing annotations for several subsequent versions.
+Kubernetes [Annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/) currently play a central role in defining how LBEX is used by each individual Kubernete Service.  Ideally this configuration data will be migrated to Kubernetes [ConfigMaps](https://kubernetes.io/docs/user-guide/configmap/) soon.  When, and if, that happens support will be provided for all existing annotations for several subsequent versions.
 ### Annotation Definitions 
 The following annotations are defined for LBEX:
 <table border="1">
@@ -131,9 +187,9 @@ The following annotations are defined for LBEX:
     [1] The least_time load balancing method is only available in NGINX Plus
 
 ### Annotation Descriptions 
-Two mandatory values that must be present for LBEX to serve traffic for the intended Kubernetes Service are `kubernetes.io/loadbalancer-class` and `loadbalancer.lbex/port`. Every other annotation has either a sensible default or is optional.
+Two only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  The annotation `loadbalancer.lbex/port` is usually required but this requirement can be relaxed by specific LBEX instances thus making the value conditionally requried. Every other annotation has either a sensible default or is strictly optional.
 
-<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal or virtual) as needed to provide the uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Spec itself.  Note: this behavior can be modified by the flag `--required-port`, defined below in the section [Running LBEX](##running-lbex).  If `--required-port=false` then this value can be ommited in the service spec. 
+<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal, virtual, or cloud instances) as needed to provide uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Specification itself.  Note: this behavior can be modified by the flag `--required-port`, defined in the section [Running LBEX](#running-lbex).  If `--required-port=false` then this value can be ommited in the ServiceSpec. 
 
 <b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections. The option to select least time (lowest measured time) is supported, but can only be used with NGINX Plus.
 
@@ -147,9 +203,9 @@ The final two annotations are only read if, and only if, `loadbalancer.lbex/upst
 
 <b>loadbalancer.lbex/node-set</b> - Selects the set of Kubernetes host worker nodes to add to the upstream for the load balancer. The default `host` ensures that traffic is only directed to nodes that are actively running a copy of the service's backend pod. By contrast, `all` will direct traffic to any available Kubernetes worker node.
 
-<b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or its' `external` public IP address. 
+<b>loadbalancer.lbex/node-address-type</b> - Determines whether to direct load balanced traffic to the node's `internal` private IP address (default), or the `external` public IP address. 
 
-<b>loadbalancer.lbex/service-pool</b> - No Default.  Service pools can provide a mapping from any abstract partition to a pool of LBEX instances that provide traffic handling for the partition.  If the Service Specification defines the `service-pool` annotation, then LBEX will serve traffic for the service if the LBEX instance is a member of that service pool.  Note: this behavior can be modified by the flags `--strict-affinity` and `--anti-affinity` defined below in the section [Running LBEX](##running-lbex). 
+<b>loadbalancer.lbex/service-pool</b> - No Default.  Service pools can provide a mapping from any abstract partition to a pool of LBEX instances that provide traffic handling for the partition.  If the Service Specification defines the `service-pool` annotation, then LBEX will serve traffic for the service if the LBEX instance is a member of that service pool.  Note: this behavior can be modified by the flags `--strict-affinity` and `--anti-affinity` as described in [Running LBEX](#running-lbex). 
 
 ### Annotation Selection
 It is incumbent on the service designer to make sensible selections for annotation values. For example, it makes no sense to select a node address type of `external` if the worker nodes in the Kubernetes cluster haven't been created with external IP addresses. It would also be off to try to select an upstream type of `cluster-ip` if 1) the service doesn't provide one, or 2) LBEX is not running as a Pod inside the Kubernetes the cluster. By definition a cluster IP address is only accessible to members of the cluster.
@@ -180,59 +236,6 @@ metadata:
 ```
 
 So, by taking advantage of several sensible defaults, the service's definition is exactly as it would be were it not using LBEX aside from the addition of a one line annotation.
-
-## Running LBEX
-As noted [above](##overview), LBEX can run as either a container image under a container runtime, or in a Kubernetes Pod. Regardless of the runtime environment, LBEX has a number of command line options that define how it operates.
-
-```
-$ ./lbex --help
-Usage of ./lbex:
-      --alsologtostderr                  log to standard error as well as files
-      --anti-affinity                    do not provide load balancing for services in --service-pool
-      --health-check                     enable health checking for LBEX (default true)
-      --health-port int                  health check service port (default 7331)
-      --kubeconfig string                absolute path to the kubeconfig file
-      --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                   If non-empty, write log files in this directory
-      --logtostderr                      log to standard error instead of files
-      --proxy string                     kubctl proxy server running at the given url
-      --require-port                     makes the Service Specification annotation "loadbalancer.lbex/port" required (default true)
-      --service-name string              provide load balancing for the service-name - ONLY
-      --service-pool string              provide load balancing for services in --service-pool
-      --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
-      --strict-affinity                  provide load balancing for services in --service-pool ONLY
-  -v, --v Level                          log level for V logs
-      --version                          display version info and exit
-      --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
-```
-Without going in to an explanation of all of the parameters, many of which should have sufficient explanation in the help provided, of particular interest to controlling the operation of LBEX are the following:
-<b>--health-check</b> - Defaults to true, but may be disabled by passing a value of false. Allows external service monitors to check the health of 'lbex' itself.<br />
-<b>--health-port</b> - Defaults to 7331, but may be set to any valid port number value.<br />
-<b>--kubeconfig</b> - Use the available kubeconfig for credentialed access to the cluster.<br />
-<b>--proxy</b> - Use the 'kubectl proxy' URL for access to the cluster. See for example [using kubectl proxy](https://kubernetes.io/docs/concepts/cluster-administration/access-cluster/#using-kubectl-proxy).<br />
-<b>--service-name</b> - Provide load balancing *only* for the specified service.<br />
-<b>--service-pool</b> - Provide load balancing for services that specify the corresponding annotation value based on the following conditions<br />
-<b>--strict-affinity</b> - Provide load balancing *only* for services that exactly match the value of --service-pool.<br />
-<b>--anti-affinity</b> - Provide load balancing *only* for services that *do not*  match the value of --service-pool.<br />
-<b>--require-port</b> - Makes the annotation "loadbalancer.lbex/port" required (true), or optional (false).<br />
-
-Note that the health check service is an HTTP service that returns simply the string `healthy` as the body, and a `200` HTTP response code if the service is running. For example:
-```
-$ curl http://10.150.0.2:7331/ -w "HTTP Response Code: %{http_code}\n"
-healthy
-HTTP Response Code: 200
-```
-
-There is an implied default not noted here that relates to accessing the Kubernetes cluster. LBEX will attempt to establish credentialed cluster access via the following methods listed in priority order:
-1. If `--proxy string` is provided, use it; methods 2 and 3 are not attempted
-2. If `--kubeconfig string` is provided, use it; method 3 is not attempted
-3. If neither method is specified, then assume we are running inside a Kubernetes Pod and use the associated Service Account. See detailed information [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/.)
-
-Also implied in the ordering above is that only one attempt is made to access the cluster. Regardless of which method is used, it is the only method attempted. If the selected method fails, then LBEX terminates immediately without attempting any other access. Therefore, it is unnecessary to specify more than one access method.
-
-The `--service-name` option allows you to provide a 1:1 mapping of load balancers to services, should you desire to do so. The identified service must still provide the required annotation, `kubernetes.io/loadbalancer-class: loadbalancer-lbex`, but no other services will have their traffic managed by this instance of LBEX, whether or not they supply the identifying annotation.  
-
-The `--service-pool` option allows you to provide affinity to an abstract mapping. For example, you could specify `--service-pool=web-server` to indicate that all Kubernetes Services that define the 'loadbalancer.lbex/service-pool: web-server' annotation should be managed by this LBEX instance, and any others specifically allocated for that purpose via this flag.  Note that, currently, this does not prevent LBEX from providing load balancing for services that define no affinity via the service pool annotation.
 
 ## Installation on Google Cloud
 
@@ -341,6 +344,8 @@ For example, running the following command against the `nginx:latest` image show
 As you can see several stream modules are included in the NGINX build configuration. 
 
 ## Motivation
+The LBEX project was started to address a specific case where a Google Container Engine (GKE) based Kubernetes service required an external load balancer, but not a public IP address.  Moreover, the GCP Internal Load balancer currently does not support traffic to/from the GCP CloudVPN. As work progressed on LBEX, some simple extensions made it potentially useful for solving a larger set of problems.
+
 A very specific use case arises for Google Container Engine (GKE) based Kubernetes services that require an external load balancer, but not a public IP address. These services need to be exposed to RFC1918 address spaces, but that address space is neither part of the Cluster's IP address space, or the [GCP Subnet Network](https://cloud.google.com/compute/docs/networking#subnet_network) Auto [IP Ranges](https://cloud.google.com/compute/docs/networking#ip_ranges). This is particularly challenging when connecting to GCP via [Google Cloud VPN](https://cloud.google.com/compute/docs/vpn/overview), where the on premise peer network side of the VPN is also an RFC1918 10/8 network space. This configuration, in and of itself, presents certain challenges described here: [GCI IP Tables Configuration](https://github.com/samsung-cnct/gci-iptables-conf-agent). Once the two networks are interconnected, there remains the issue of communicating with the GCP region's private IP subnet range, and further being able to reach exposed Kubernetes services in the Kubernetes Cluster CIDR range.
 
 There were several attempts at solving this problem with a combination of various [Google Cloud Load Balancing](https://cloud.google.com/load-balancing/) components, including using the [GCP Internal Load Balancer](https://cloud.google.com/compute/docs/load-balancing/internal/) and following the model provided by the [Internal Load Balancing using HAProxy on Google Compute Engine](https://cloud.google.com/solutions/internal-load-balancing-haproxy) example.
