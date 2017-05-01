@@ -63,7 +63,7 @@ The format of the environment variable for flag `--example-flag` is LBEX_EXAMPLE
 
 Not every flag is exposed via an environment variable due to flag list being aggregated from 3rd party Go packages, in particular the packages used for logging.  Every flag and corresponding environment variable support is listed in the table below:
  Flag | Enviroment Variable
-:-------|:----------------:
+--- | ---
 --alsologtostderr | None
 --anti-affinity | Supported
 --health-check | Supported

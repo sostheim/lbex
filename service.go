@@ -93,7 +93,7 @@ func (s serviceByName) Less(i, j int) bool {
 // ValidateServiceObject returns true iff:
 // - the object is of a valid v1 API Service object
 // - is a service type we provide load balancing for
-// - has a valid annotation indicating
+// - has a valid annotation indicating the lbex class
 // returns false otherwise
 func ValidateServiceObject(obj interface{}) bool {
 	err := ValidateServiceObjectType(obj)
