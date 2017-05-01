@@ -363,8 +363,7 @@ func (lbex *lbExController) getServices() (topo []Service) {
 
 	objects := lbex.servicesStore.List()
 	for _, obj := range objects {
-		if !ValidateServiceObject(obj) {
-			glog.V(4).Info("getServices: ValidateServiceObject(): false")
+		if !lbex.baseCheck(obj) {
 			continue
 		}
 		namespace, err := GetServiceNamespace(obj)
@@ -389,10 +388,7 @@ func (lbex *lbExController) getServiceNetworkTopo(key string) (targets []Service
 	if err != nil || !exists {
 		return nil
 	}
-
-	if !ValidateServiceObject(obj) {
-		// Normal case for non-LB services (e.g. other service type or no annotation)
-		glog.V(4).Infof("getService: can't validate service object key: %s", key)
+	if !lbex.baseCheck(obj) {
 		return nil
 	}
 	service, _ := obj.(*v1.Service)
@@ -468,4 +464,32 @@ func (lbex *lbExController) checkAffinity(pool string) bool {
 
 	glog.V(4).Infof("pool: %s, LBEX pool: %s", pool, *lbex.cfg.servicePool)
 	return pool == *lbex.cfg.servicePool
+}
+
+// baseCheck returns true or false depending on wether service object selects
+// lbex as it's load balancer, and (if required) validates that the port
+// annotation is present and has a valid value.
+func (lbex *lbExController) baseCheck(obj interface{}) bool {
+
+	if !ValidateServiceObject(obj) {
+		// Normal case for non-LBEX services (e.g. other service type or no annotation)
+		glog.V(4).Info("can't validate service object key")
+		return false
+	}
+	if *lbex.cfg.requirePort {
+		port, err := annotations.GetIntAnnotation(annotations.LBEXPortKey, obj)
+		if err != nil {
+			if annotations.IsMissingAnnotations(err) {
+				glog.V(2).Infof("missing required annotation: %s", annotations.LBEXPortKey)
+			} else {
+				glog.V(2).Infof("unexpected error processing annotation annotation, err: %v", err)
+			}
+			return false
+		}
+		if port <= 0 || port > 65535 {
+			glog.V(2).Infof("invalid port value specified: %v", port)
+			return false
+		}
+	}
+	return true
 }

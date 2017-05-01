@@ -343,10 +343,14 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 				upstream.LeastTimeMethod = ValidateMethod(val)
 			}
 
-			lbexPort, _ := annotations.GetOptionalIntAnnotation(annotations.LBEXPortKey, svc.Service)
+			listenPort, ok := annotations.GetOptionalIntAnnotation(annotations.LBEXPortKey, svc.Service)
+			if !ok {
+				// value was not retrieved from the indicated annotation, so use the service port.
+				listenPort = target.ServicePort
+			}
 			server := StreamServer{
 				Listen: StreamListen{
-					Port: strconv.Itoa(lbexPort),
+					Port: strconv.Itoa(listenPort),
 					UDP:  strings.EqualFold(target.Protocol, udpProto),
 				},
 				ProxyProtocol:    false,
