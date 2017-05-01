@@ -92,6 +92,9 @@ func main() {
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 
+	lbexCfg.flagSet = flag.CommandLine
+	lbexCfg.envParse()
+
 	// check for version flag, if present print veriosn and exit
 	if *lbexCfg.version {
 		displayVersion()
