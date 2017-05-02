@@ -178,10 +178,8 @@ func GetOptionalIntAnnotation(name string, obj interface{}) (int, bool) {
 }
 
 // IsValid returns true if the given Service object specifies 'lbex' as the
-// value to the loadbalancer.class annotation and has a valid port specified through
-// the loadbalancer.lbex/port annnotation
+// value to the loadbalancer.class annotation.
 func IsValid(obj interface{}) bool {
 	class, _ := GetOptionalStringAnnotation(LBEXClassKey, obj)
-	port, _ := GetOptionalIntAnnotation(LBEXPortKey, obj)
-	return (class == LBEXClassKeyValue) && (port != 0)
+	return class == LBEXClassKeyValue
 }
