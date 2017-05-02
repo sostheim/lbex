@@ -3,6 +3,7 @@ VERSION   := 0.1.5
 TYPE      := alpha
 COMMIT    := $(shell git rev-parse HEAD)
 IMAGE     := quay.io/samsung_cnct/lbex
+TAG       ?= latest
 godep=GOPATH=$(shell godep path):${GOPATH}
 
 build:
@@ -47,14 +48,14 @@ container:
 	-osarch="linux/amd64" \
 	-output "build/{{.OS}}_{{.Arch}}/$(NAME)" \
 	./...
-	docker build --rm --pull --tag $(IMAGE):latest .
+	docker build --rm --pull --tag $(IMAGE):$(TAG) .
 
 tag: container
-	docker tag $(IMAGE):latest $(IMAGE):$(COMMIT)
+	docker tag $(IMAGE):$(TAG) $(IMAGE):$(COMMIT)
 
 push: tag
 	docker push $(IMAGE):$(COMMIT)
-	docker push $(IMAGE):latest
+	docker push $(IMAGE):$(TAG)
 
 release: dist push
 	@latest_tag=$$(git describe --tags `git rev-list --tags --max-count=1`); \
