@@ -343,8 +343,8 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 				upstream.LeastTimeMethod = ValidateMethod(val)
 			}
 
-			listenPort, ok := annotations.GetOptionalIntAnnotation(annotations.LBEXPortKey, svc.Service)
-			if !ok {
+			listenPort, err := annotations.GetIntAnnotation(annotations.LBEXPortKey, svc.Service)
+			if err != nil || listenPort == 0 {
 				// value was not retrieved from the indicated annotation, so use the service port.
 				listenPort = target.ServicePort
 			}

@@ -480,7 +480,7 @@ func (lbex *lbExController) baseCheck(obj interface{}) bool {
 		port, err := annotations.GetIntAnnotation(annotations.LBEXPortKey, obj)
 		if err != nil {
 			if annotations.IsMissingAnnotations(err) {
-				glog.V(2).Infof("missing required annotation: %s", annotations.LBEXPortKey)
+				glog.Warningf("missing required annotation: %s", annotations.LBEXPortKey)
 			} else {
 				glog.V(2).Infof("unexpected error processing annotation annotation, err: %v", err)
 			}

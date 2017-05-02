@@ -96,7 +96,6 @@ func (cfg *config) envParse() error {
 	cfg.flagSet.VisitAll(func(f *flag.Flag) {
 		if envSupport[f.Name] {
 			key := variableName(f.Name)
-			glog.V(4).Infof("supported key: %v", key)
 			if !alreadySet[key] {
 				val := os.Getenv(key)
 				if val != "" {
