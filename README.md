@@ -1,7 +1,9 @@
 # NGINX Based External Kubernetes Service Load Balancer
 ## Overview
 
-The Load Balancer - External (LBEX) provides the ability to:
+The Load Balancer - External (LBEX) is a Kubernetes Service Load balancer.  LBEX works like a cloud provider load balancer when one isn't available or when there is one but it doesn't work as desired.  LBEX watches the Kubernets API server for services that request an external load balancer and self configures to provide load balancing to the new service.
+
+LBEX provides the ability to:
 - Service network traffic on any Linux distribution that supports the installation of [NGINX](http://nginx.org/en/), running:
     -  on bare metal, as a container image or static binary
     -  on a cloud instance, as a container image or static binary
@@ -15,7 +17,7 @@ The Load Balancer - External (LBEX) provides the ability to:
 LBEX is built to use Kubernetes 1.5+, via the [client-go API](https://github.com/kubernetes/client-go), and the current [stable community version of NGINX](http://nginx.org/en/linux_packages.html#stable).  Providing load balancing / proxy support for both TCP and UDP traffic is a minimum requirement for general [Kubernetes Services](https://kubernetes.io/docs/concepts/services-networking/service/).  As such, NGINX is the logical choice for its' UDP load balancing capabilities.
 
 ### Connectivity
-A deployment of LBEX requires, at a minimum, network connectivity to both the Kubernetes API server and at least one destination address subnet. The API server can be accessed via `kubectl proxy` for development, but this is not recommended for production deployments. For normal operation, the standard access via [`kubeconfig`](https://kubernetes.io/docs/concepts/cluster-administration/authenticate-across-clusters-kubeconfig/) or the Kubernetes API Server endpoint is supported. Network access must be available to at least one destination address space, either the ClusterIP Service IP address space, the Pod IP address space, or the host worker nodes' IP address space (public or private).
+A deployment of LBEX requires, at a minimum, network connectivity to both the Kubernetes API server and at least one destination address subnet. The API server can be accessed via `kubectl proxy` for development, but this is not recommended for production deployments. For normal operation, the standard access via [`kubeconfig`](https://kubernetes.io/docs/concepts/cluster-administration/authenticate-across-clusters-kubeconfig/) or the Kubernetes API Server endpoint is supported. Network access must be available to at least one destination address space, either the ClusterIP Service IP address space, the Pod IP address space, or the host worker node's IP address space (public or private).
 
 The LBEX application can run in any environment where some reasonable combination of access to these two resources is available.
 
@@ -57,33 +59,22 @@ Without going in to an explanation of all of the parameters, many of which shoul
 <b>--require-port</b> - Makes the annotation "loadbalancer.lbex/port" required (true), or optional (false).<br />
 
 ### Environment Variables
-LBEX is configurable through command line configuration flags describe above, and through an available subset of environment variables. Any configuration values set on the command line take precedence over the same value from the environment.
+LBEX is configurable through command line configuration flags, and through a subset of environment variables. Any configuration value set on the command line takes precedence over the same value from the environment.
 
-The format of the environment variable for flag `--example-flag` is LBEX_EXAMPLE_FLAG. This conversion applies to all flags.
+The format of the environment variable for flag for flag is composed of the prefix `LBEX_` and the reamining text of the flag in all uppper case with all hyphens replaced by underscores.  Fore example, `--example-flag` would map to `LBEX_EXAMPLE_FLAG`. 
 
-Not every flag is exposed via an environment variable due to flag list being aggregated from 3rd party Go packages, in particular the packages used for logging.  Every flag and corresponding environment variable support is listed in the table below:
- Flag | Enviroment Variable
---- | ---
---alsologtostderr | None
---anti-affinity | Supported
---health-check | Supported
---health-port | Supported
---kubeconfig | Supported
---log_backtrace_at | None
---log_dir string | None
---logtostderr | None
---proxy | Supported
---require-port | Supported
---service-name | Supported
---service-pool | Supported
---stderrthreshold | None
---strict-affinity | None
--v, --v | None
---version | None
---vmodule | None
+Not every flag can be set via an environment variable.  This is due to the fact that the set of flags is an aggregate of those that belong to LBEX and 3rd party Go packages.  The set of flags that do have corresponding environment variable support are listed below:
+* --anti-affinity
+* --health-check
+* --health-port
+* --kubeconfig
+* --proxy
+* --require-port
+* --service-name
+* --service-pool
 
 ### Details
-Note that the health check service is an HTTP service that simply returns the string `healthy` as the body, with a `200` HTTP response code if the service is running. For example:
+The health check service is the HTTP endpoint `/`.  An HTTP GET Request applied to the endpoint simply returns the string `healthy` in the HTTP Response body, with a `200` Response Code if the service is running. For example:
 ```
 $ curl http://10.150.0.2:7331/ -w "HTTP Response Code: %{http_code}\n"
 healthy
@@ -214,7 +205,9 @@ The following annotations are defined for LBEX:
     [1] The least_time load balancing method is only available in NGINX Plus
 
 ### Annotation Descriptions 
-Two only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  The annotation `loadbalancer.lbex/port` is usually required but this requirement can be relaxed by specific LBEX instances thus making the value conditionally requried. Every other annotation has either a sensible default or is strictly optional.
+The only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  The annotation `loadbalancer.lbex/port` is conditioinally required.  This requirement can be relaxed by running an LBEX instance with the `--require-port=false` option thus making the optional. Every other annotation has either a sensible default or is strictly optional.
+
+<b>kubernetes.io/loadbalancer-class: loadbalancer-lbex</b> - No default.  Mandatory.  Indicates that this Service requires the LBEX external load balancer.
 
 <b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal, virtual, or cloud instances) as needed to provide uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Specification itself.  Note: this behavior can be modified by the flag `--required-port`, defined in the section [Running LBEX](#running-lbex).  If `--required-port=false` then this value can be ommited in the ServiceSpec. 
 
@@ -226,7 +219,7 @@ Two only mandatory value that must be present for LBEX to serve traffic for the 
 
 <b>loadbalancer.lbex/upstream-type</b> - The upstream-type indicates the type of the backend service addresses to direct to. The default, `node`, directs load balanced traffic to the Kubernetes host worker node and node port. Alternatively, `pod` directs traffic to the Kubernetes Pod and its corresponding port. Finally, `cluster-ip' directs traffic to the Kubernetes Service's ClusterIP.
 
-The final two annotations are only read if, and only if, `loadbalancer.lbex/upstream-type=node`. 
+The next two annotations are only read if, and only if, `loadbalancer.lbex/upstream-type=node`. 
 
 <b>loadbalancer.lbex/node-set</b> - Selects the set of Kubernetes host worker nodes to add to the upstream for the load balancer. The default `host` ensures that traffic is only directed to nodes that are actively running a copy of the service's backend pod. By contrast, `all` will direct traffic to any available Kubernetes worker node.
 
