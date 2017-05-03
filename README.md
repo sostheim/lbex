@@ -374,3 +374,10 @@ In the end, the best solution available before LBEX was 1) not dynamic and 2) ex
 2. This was first and foremost unsightly and awkward to manage. Over time it was the leaky abstraction that was the most bothersome and provided extra motivation to move forward with LBEX.
  
 Finally, there are challenges to automating all these things as well. None of them are insurmountable by any means, but when justifying the engineering effort to automate operations you prefer to automate the right solution.  
+
+## Cutting a release
+
+Install github-release from https://github.com/c4milo/github-release  
+Create a github personal access token with repo read/write permissions and export it as GITHUB_TOKEN  
+Adjust VERSION and TYPE variables in the [Makefile](Makefile) as needed  
+Run ```make release```
