@@ -66,7 +66,7 @@ type StreamListen struct {
 func NewStreamUpstreamWithDefaultServer(name string) StreamUpstream {
 	return StreamUpstream{
 		Name:            name,
-		UpstreamServers: []StreamUpstreamServer{StreamUpstreamServer{Address: "127.0.0.1:1234"}},
+		UpstreamServers: []StreamUpstreamServer{{Address: "127.0.0.1:1234"}},
 	}
 }
 

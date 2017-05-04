@@ -585,7 +585,7 @@ func (cfgtor *Configurator) createClusterStreamUpstream(spec *ServiceSpec, targe
 	return StreamUpstream{
 		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 		UpstreamServers: []StreamUpstreamServer{
-			StreamUpstreamServer{Address: spec.ClusterIP + ":" + strconv.Itoa(target.ServicePort)}},
+			{Address: spec.ClusterIP + ":" + strconv.Itoa(target.ServicePort)}},
 	}
 }
 
@@ -594,7 +594,7 @@ func (cfgtor *Configurator) createPodStreamUpstream(spec *ServiceSpec, target Ta
 	return StreamUpstream{
 		Name: getNameForStreamUpstream(spec.Service, target.PortName),
 		UpstreamServers: []StreamUpstreamServer{
-			StreamUpstreamServer{Address: target.PodIP + ":" + strconv.Itoa(target.PodPort)}},
+			{Address: target.PodIP + ":" + strconv.Itoa(target.PodPort)}},
 	}
 }
 
