@@ -16,7 +16,7 @@ import (
 
 const emptyHost = ""
 const udpProto = "udp"
-const singleDefaultPortName = "unnamed"
+const SingleDefaultPortName = "unnamed"
 
 var (
 	// map node names (key) to Node type
@@ -343,7 +343,8 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 				upstream.LeastTimeMethod = ValidateMethod(val)
 			}
 
-			listenPort, err := annotations.GetIntAnnotation(annotations.LBEXPortKey, svc.Service)
+			portAnnotation := annotations.LBEXPortAnnotationBase + target.PortName
+			listenPort, err := annotations.GetIntAnnotation(portAnnotation, svc.Service)
 			if err != nil || listenPort == 0 {
 				// value was not retrieved from the indicated annotation, so use the service port.
 				listenPort = target.ServicePort
@@ -663,7 +664,7 @@ func getNameForStreamUpstream(svc *v1.Service, portName string) string {
 		// Port name can only be blank/omitted when there is a single port
 		// defined for a service.  Any service with > 1 ports must provide
 		// names for all ports that compose the services endpoints.
-		portName = singleDefaultPortName
+		portName = SingleDefaultPortName
 	}
 	return fmt.Sprintf("%v-%v-%v", svc.Namespace, svc.Name, portName)
 }

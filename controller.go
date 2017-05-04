@@ -467,29 +467,47 @@ func (lbex *lbExController) checkAffinity(pool string) bool {
 }
 
 // baseCheck returns true or false depending on wether service object selects
-// lbex as it's load balancer, and (if required) validates that the port
-// annotation is present and has a valid value.
+// lbex as it's load balancer, and (if required) validates that there is at least one
+// port annotation present, and that all port annotation have valid values
 func (lbex *lbExController) baseCheck(obj interface{}) bool {
+	retval := false
 
 	if !ValidateServiceObject(obj) {
 		// Normal case for non-LBEX services (e.g. other service type or no annotation)
 		glog.V(4).Info("can't validate service object key")
 		return false
 	}
+
 	if *lbex.cfg.requirePort {
-		port, err := annotations.GetIntAnnotation(annotations.LBEXPortKey, obj)
-		if err != nil {
-			if annotations.IsMissingAnnotations(err) {
-				glog.Warningf("missing required annotation: %s", annotations.LBEXPortKey)
+		service, _ := obj.(*v1.Service)
+		for _, servicePort := range service.Spec.Ports {
+			portAnnotation := annotations.LBEXPortAnnotationBase
+
+			if servicePort.Name != "" {
+				portAnnotation = portAnnotation + servicePort.Name
 			} else {
-				glog.V(2).Infof("unexpected error processing annotation annotation, err: %v", err)
+				portAnnotation = portAnnotation + nginx.SingleDefaultPortName
 			}
-			return false
-		}
-		if port <= 0 || port > 65535 {
-			glog.V(2).Infof("invalid port value specified: %v", port)
-			return false
+
+			glog.V(2).Infof("baseCheck: lbex checking annotation: %s", portAnnotation)
+
+			port, err := annotations.GetIntAnnotation(portAnnotation, obj)
+			if err != nil {
+				if annotations.IsMissingAnnotations(err) {
+					glog.Warningf("Annotation %s is not present", portAnnotation)
+				} else {
+					glog.V(2).Infof("unexpected error processing annotation, err: %v", err)
+				}
+			}
+
+			if port <= 0 || port > 65535 {
+				glog.V(2).Infof("invalid port value specified for annotation %s: %v", portAnnotation, port)
+				return false
+			}
+
+			retval = true
 		}
 	}
-	return true
+
+	return retval
 }

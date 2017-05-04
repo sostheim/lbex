@@ -158,7 +158,7 @@ The following annotations are defined for LBEX:
         <td>True</td>
     </tr>
     <tr>
-        <td>loadbalancer.lbex/port</td>
+        <td>loadbalancer-port.lbex/[port-name]</td>
         <td>valid TCP/UDP port number (1 to 65535)</td>
         <td>None</td>
         <td>Conditional</td>
@@ -209,11 +209,42 @@ The following annotations are defined for LBEX:
     [1] The least_time load balancing method is only available in NGINX Plus
 
 ### Annotation Descriptions 
-The only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  The annotation `loadbalancer.lbex/port` is conditioinally required.  This requirement can be relaxed by running an LBEX instance with the `--require-port=false` option thus making the optional. Every other annotation has either a sensible default or is strictly optional.
+The only mandatory value that must be present for LBEX to serve traffic for the intended Kubernetes Service is `kubernetes.io/loadbalancer-class`.  The annotation `loadbalancer.lbex/port-name` is conditioinally required.  This requirement can be relaxed by running an LBEX instance with the `--require-port=false` option thus making the optional. Every other annotation has either a sensible default or is strictly optional.
 
 <b>kubernetes.io/loadbalancer-class: loadbalancer-lbex</b> - No default.  Mandatory.  Indicates that this Service requires the LBEX external load balancer.
 
-<b>loadbalancer.lbex/port</b> - No default.  This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal, virtual, or cloud instances) as needed to provide uniqueness at the interface / IP address level. However, where this is not a practical option, the `port` annotation allows us to disambiguate between shared ports in the Service Specification itself.  Note: this behavior can be modified by the flag `--required-port`, defined in the section [Running LBEX](#running-lbex).  If `--required-port=false` then this value can be ommited in the ServiceSpec. 
+<b>loadbalancer-port.lbex/[port-name]</b> - No default. Port name should be set to the name of the service port, unless the service only exposes one port, in which case either the port name or ``unnamed`` would work. This port is normally set to the same value as the service port. This value is primarily used to differentiate between two services that both utilize the same port, which is standard Kubernetes supported behavior. However, at the edge of the network, it is required that the ports (or IP address) be unique. Optionally, LBEX can be run on as many servers (bare metal, virtual, or cloud instances) as needed to provide uniqueness at the interface / IP address level. However, where this is not a practical option, the `[port-name]` annotation allows us to disambiguate between shared ports in the Service Specification itself.  Note: this behavior can be modified by the flag `--required-port`, defined in the section [Running LBEX](#running-lbex).  If `--required-port=false` then this value can be ommited in the ServiceSpec.
+
+For example in the following service definition:
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-nginx
+  labels:
+    run: my-nginx
+  annotations:
+    kubernetes.io/loadbalancer-class: loadbalancer-lbex
+    loadbalancer-port.lbex/http: 8080
+    loadbalancer-port.lbex/https: 8443
+spec:
+  type: NodePort
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP
+  selector:
+    run: my-nginx
+``` 
+
+The ```loadbalancer-port.lbex/[port-name]``` annotations are ```loadbalancer-port.lbex/http: 8080``` and ```loadbalancer-port.lbex/https: 8443```
+
 
 <b>loadbalancer.lbex/algorithm</b> - Defaults to round robin, but can also be set to least connections. The option to select least time (lowest measured time) is supported, but can only be used with NGINX Plus.
 

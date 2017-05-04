@@ -32,8 +32,8 @@ const (
 	// LBEXClassKeyValue - this controller only processes Services with this annotation.
 	LBEXClassKeyValue = "loadbalancer-lbex"
 
-	// LBEXPortKey - external port for the service
-	LBEXPortKey = "loadbalancer.lbex/port"
+	// base annotation string
+	LBEXPortAnnotationBase = "loadbalancer-port.lbex/"
 
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
