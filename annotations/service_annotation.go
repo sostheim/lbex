@@ -38,7 +38,7 @@ const (
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
 
-	// LBEXMethodKey - Algorithm Least Time has an arugment "Method"
+	// LBEXMethodKey - Algorithm Least Time has an argument "Method"
 	LBEXMethodKey = "loadbalancer.lbex/method"
 
 	// LBEXHostKey - the load balancer hostname
@@ -60,7 +60,7 @@ const (
 	LBEXPoolKey = "loadbalancer.lbex/service-pool"
 )
 
-// serviceAnnotations - map of key:value annotations discoverd for LBEX
+// serviceAnnotations - map of key:value annotations discovered for LBEX
 type serviceAnnotations map[string]string
 
 func (as serviceAnnotations) parseBool(name string) (bool, error) {

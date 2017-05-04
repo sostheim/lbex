@@ -102,7 +102,7 @@ func main() {
 	}
 	// creates the config, in preference order, for:
 	// 1 - the proxy URL, if present as an argument
-	// 2 - kubeconfig, if present as an arguemtn
+	// 2 - kubeconfig, if present as an argument
 	// 3 - otherwise assume execution on an in-cluster node
 	//     note: this will fail with the appropriate error messages
 	//           if not actually executing on a node in the cluster.

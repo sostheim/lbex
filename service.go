@@ -58,7 +58,7 @@ type Service struct {
 	Name string
 
 	// TODO: remove deprecated field
-	// Deprecated: left intact for backwards compatability for Ingress
+	// Deprecated: left intact for backwards compatibility for Ingress
 	Ep []string
 
 	Endpoints []Endpoint

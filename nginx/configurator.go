@@ -30,7 +30,7 @@ var (
 
 	// Why aren't these two maps combined in to a map of []inerface{} types
 	// so we can just insert either Nodes or Targets against the same key?
-	// See this disucssion: https://github.com/golang/go/wiki/InterfaceSlice
+	// See this discussion: https://github.com/golang/go/wiki/InterfaceSlice
 )
 
 // Configurator transforms an Ingress or Service resource into NGINX Configuration
@@ -660,7 +660,7 @@ func getNameForUpstream(ing *v1beta1.Ingress, host string, service string) strin
 
 func getNameForStreamUpstream(svc *v1.Service, portName string) string {
 	if portName == "" {
-		// Port name can only be blank/ommitted when there is a single port
+		// Port name can only be blank/omitted when there is a single port
 		// defined for a service.  Any service with > 1 ports must provide
 		// names for all ports that compose the services endpoints.
 		portName = singleDefaultPortName

@@ -10,7 +10,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// StreamNginxConfig describes an NGINX Stream configuration primarly for Service LoadBalancing
+// StreamNginxConfig describes an NGINX Stream configuration primarily for Service LoadBalancing
 type StreamNginxConfig struct {
 	Resolver  string
 	Upstreams []StreamUpstream
