@@ -1,3 +1,6 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/samsung-cnct/lbex)](https://goreportcard.com/report/github.com/samsung-cnct/lbex)
+[![Docker Repository on Quay.io](https://quay.io/repository/samsung_cnct/lbex "Docker Repository on Quay.io")](https://quay.io/repository/samsung_cnct/lbex)
+
 # NGINX Based External Kubernetes Service Load Balancer
 ## Overview
 
