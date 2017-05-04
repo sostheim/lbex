@@ -10,7 +10,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// StreamNginxConfig describes an NGINX Stream configuration primarly for Service LoadBalancing
+// StreamNginxConfig describes an NGINX Stream configuration primarily for Service LoadBalancing
 type StreamNginxConfig struct {
 	Resolver  string
 	Upstreams []StreamUpstream
@@ -66,7 +66,7 @@ type StreamListen struct {
 func NewStreamUpstreamWithDefaultServer(name string) StreamUpstream {
 	return StreamUpstream{
 		Name:            name,
-		UpstreamServers: []StreamUpstreamServer{StreamUpstreamServer{Address: "127.0.0.1:1234"}},
+		UpstreamServers: []StreamUpstreamServer{{Address: "127.0.0.1:1234"}},
 	}
 }
 

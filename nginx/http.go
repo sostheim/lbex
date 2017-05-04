@@ -81,7 +81,7 @@ type Location struct {
 func NewUpstreamWithDefaultServer(name string) Upstream {
 	return Upstream{
 		Name:            name,
-		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
+		UpstreamServers: []UpstreamServer{{Address: "127.0.0.1", Port: "8181"}},
 	}
 }
 

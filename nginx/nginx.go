@@ -105,7 +105,7 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, healthCheck
 			User:            "nginx",
 			Group:           "nginx",
 			WorkerProcesses: "2",
-			/* For future use potentially, can be scrubbed if prefered.
+			/* For future use potentially, can be scrubbed if preferred.
 			Environment: map[string]string{
 				"OPENSSL_ALLOW_PROXY_CERTS": "1",
 			}, */
