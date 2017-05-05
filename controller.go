@@ -498,6 +498,7 @@ func (lbex *lbExController) baseCheck(obj interface{}) bool {
 				} else {
 					glog.V(2).Infof("unexpected error processing annotation, err: %v", err)
 				}
+				continue
 			}
 
 			if port <= 0 || port > 65535 {
