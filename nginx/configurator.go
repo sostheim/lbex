@@ -345,10 +345,16 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 
 			portAnnotation := annotations.LBEXPortAnnotationBase + target.PortName
 			listenPort, err := annotations.GetIntAnnotation(portAnnotation, svc.Service)
-			if err != nil || listenPort == 0 {
-				// value was not retrieved from the indicated annotation, so use the service port.
-				listenPort = target.ServicePort
+			if err != nil {
+				if annotations.IsMissingAnnotations(err) {
+					glog.Warningf("Annotation %s is not present", portAnnotation)
+				} else {
+					glog.V(2).Infof("unexpected error processing annotation, err: %v", err)
+				}
+
+				continue
 			}
+
 			server := StreamServer{
 				Listen: StreamListen{
 					Port: strconv.Itoa(listenPort),
