@@ -29,7 +29,7 @@ type StreamUpstream struct {
 
 // StreamUpstreamServer describes a server in an NGINX upstream (context stream::upstream)
 // http://nginx.org/en/docs/stream/ngx_stream_upstream_module.html#server
-// The following 'server' directive parameters are ommitted, as they are only available in NGINX Plus
+// The following 'server' directive parameters are omitted, as they are only available in NGINX Plus
 // - Resolve   bool
 // - Service   string
 // - SlowStart string
@@ -58,7 +58,7 @@ type StreamListen struct {
 	Address string
 	Port    string
 	UDP     bool
-	// other fields ommitted, e.g SSL, backlog, ... so_keepalive
+	// other fields omitted, e.g SSL, backlog, ... so_keepalive
 }
 
 // NewStreamUpstreamWithDefaultServer creates an upstream with the default server.
