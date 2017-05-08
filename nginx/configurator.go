@@ -16,6 +16,8 @@ import (
 
 const emptyHost = ""
 const udpProto = "udp"
+
+// SingleDefaultPortName - provide a deafult name for a port that doesn't required one
 const SingleDefaultPortName = "unnamed"
 
 var (
