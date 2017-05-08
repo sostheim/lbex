@@ -5,7 +5,7 @@
 # NGINX Based External Kubernetes Service Load Balancer
 ## Overview
 
-The Load Balancer - External (LBEX) is a Kubernetes Service Load balancer.  LBEX works like a cloud provider load balancer when one isn't available or when there is one but it doesn't work as desired.  LBEX watches the Kubernets API server for services that request an external load balancer and self configures to provide load balancing to the new service.
+The Load Balancer - External (LBEX) is a Kubernetes Service Load balancer.  LBEX works like a cloud provider load balancer when one isn't available or when there is one but it doesn't work as desired.  LBEX watches the Kubernetes API server for services that request an external load balancer and self configures to provide load balancing to the new service.
 
 LBEX provides the ability to:
 - Service network traffic on any Linux distribution that supports the installation of [NGINX](http://nginx.org/en/), running:
