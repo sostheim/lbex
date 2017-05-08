@@ -57,7 +57,7 @@ const (
 )
 
 // UpstreamTypes - service upstream pool target types
-// If you're bored and need some intertaining reading about 'node' as a name:
+// If you're bored and need some entertaining reading about 'node' as a name:
 // - https://github.com/kubernetes/kubernetes/issues/1111
 var UpstreamTypes = []string{
 	HostNode,
