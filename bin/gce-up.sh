@@ -134,6 +134,8 @@ runcmd:
 - systemctl daemon-reload
 - systemctl start lbex.service
 - systemctl start nginx.service
+- curl -o /tmp/install-logging-agent.sh -OL https://dl.google.com/cloudagents/install-logging-agent.sh
+- bash /tmp/install-logging-agent.sh
 EOF
 
 inf "Creating instance template ${LBEX_BASE_NAME}-instance with external addresses"
