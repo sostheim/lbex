@@ -127,6 +127,7 @@ write_files:
     ExecStartPre=/bin/mkdir -p /usr/local/bin/lbex
     ExecStartPre=/bin/tar -zxvf /tmp/lbex.tar.gz -C /usr/local/bin/lbex
     ExecStartPre=/bin/chmod +x /usr/local/bin/lbex/lbex
+    ExecStartPre=/usr/bin/gcloud config set container/use_application_default_credentials true
     ExecStartPre=/usr/bin/gcloud container clusters get-credentials ${LBEX_CLUSTER_NAME} --zone ${LBEX_CLUSTER_ZONE} --project ${LBEX_PROJECT}
     ExecStartPre=/bin/rm --force /etc/nginx/conf.d/*
     ExecStart=/usr/local/bin/lbex/lbex --kubeconfig /root/.kube/config --health-check --health-port ${LBEX_HEALTH_PORT} --v 2
