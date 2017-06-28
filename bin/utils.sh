@@ -22,6 +22,7 @@ function show_help {
   inf "Usage: \n"
   inf "gce-up.sh or gce-down.sh [flags] \n"
   inf "Flags are:"
+  inf "-a|--machine-type    - GCE machine type. Default is n1-standard-1"
   inf "-c|--cidr            - CIDR range for LBEX instance IP addresses, big enough for at least 'num-autoscale' IPs. Should not clash with GKE cluster ip space. Default is 10.150.0.0/28."
   inf "-g|--ingress-cidr    - Restrict traffic incoming to lbex cluster to this CIDR"
   inf "-h|--help            - Show this help.\n"
@@ -44,6 +45,10 @@ while [[ $# -gt 0 ]]
 do
 key="$1"
 case $key in
+  -a|--machine-type)
+  GCE_MACHINE_TYPE="$2"
+  shift
+  ;;
   -n|--name)
   LBEX_BASE_NAME="$2"
   shift

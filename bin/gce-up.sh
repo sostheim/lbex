@@ -11,6 +11,11 @@ set -o pipefail
 my_dir=$(dirname "${BASH_SOURCE}")
 source "${my_dir}/utils.sh"
 
+if [ -z "${GCE_MACHINE_TYPE+x}" ]; then
+  GCE_MACHINE_TYPE='n1-standard-1'
+  inf "Using '${GCE_MACHINE_TYPE}' as machine type"
+fi
+
 if [ -z "${LBEX_CLUSTER_NAME+x}" ]; then
   show_help
   exit 1
@@ -143,7 +148,7 @@ inf "Creating instance template ${LBEX_BASE_NAME}-instance with external address
 gcloud compute instance-templates create \
   ${LBEX_BASE_NAME}-instance \
   --description="${LBEX_BASE_NAME} instance template" \
-  --machine-type=n1-standard-1 \
+  --machine-type=${GCE_MACHINE_TYPE} \
   --metadata-from-file "user-data=${TEMPDIR}/cloud-init" \
   --network="${LBEX_CLUSTER_NETWORK}" \
   --subnet="${LBEX_BASE_NAME}-subnetwork" \
