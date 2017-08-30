@@ -23,6 +23,7 @@
 		proxy_timeout {{$server.ProxyProtocolTimeout}};{{end}}
 
 		proxy_pass {{$server.ProxyPassAddress}};
+		proxy_bind $remote_addr transparent;
 	}
 	{{end}}
 {{/* */}}
