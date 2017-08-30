@@ -35,6 +35,9 @@ const (
 	// LBEXPortAnnotationBase - exported port base annotation string
 	LBEXPortAnnotationBase = "loadbalancer-port.lbex/"
 
+	// LBEXIpPassthrough - passthrough source ip addresses.
+	LBEXIpPassthrough = "loadbalancer.lbex/passthrough"
+
 	// LBEXAlgorithmKey - requested load balancing algorithm
 	LBEXAlgorithmKey = "loadbalancer.lbex/algorithm"
 

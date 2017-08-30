@@ -357,12 +357,15 @@ func (cfgtor *Configurator) generateStreamNginxConfig(svc *ServiceSpec) (svcConf
 				continue
 			}
 
+			passThrough, _ := annotations.GetOptionalBoolAnnotation(annotations.LBEXIpPassthrough, svc.Service)
+
 			server := StreamServer{
 				Listen: StreamListen{
 					Port: strconv.Itoa(listenPort),
 					UDP:  strings.EqualFold(target.Protocol, udpProto),
 				},
 				ProxyProtocol:    false,
+				ProxyPassthrough: passThrough,
 				ProxyPassAddress: upstream.Name,
 			}
 			svcConfig.Servers = append(svcConfig.Servers, server)
