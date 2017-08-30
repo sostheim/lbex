@@ -1,5 +1,5 @@
 NAME      := lbex
-VERSION   := 0.1.9
+VERSION   := 0.1.8
 TYPE      := alpha
 COMMIT    := $(shell git rev-parse HEAD)
 IMAGE     := quay.io/samsung_cnct/lbex
