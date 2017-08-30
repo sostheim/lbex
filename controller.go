@@ -180,7 +180,7 @@ func (lbex *lbExController) syncServices(obj interface{}) error {
 
 	key, ok := obj.(string)
 	if !ok {
-		return errors.New("syncServices: type assertion faild for key string")
+		return errors.New("syncServices: type assertion failed for key string")
 	}
 	storeObj, exists, err := lbex.servicesStore.GetByKey(key)
 	if err != nil {

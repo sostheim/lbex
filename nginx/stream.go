@@ -48,6 +48,7 @@ type StreamUpstreamServer struct {
 type StreamServer struct {
 	Listen               StreamListen
 	ProxyProtocol        bool
+	ProxyPassthrough     bool
 	ProxyProtocolTimeout string
 	ProxyPassAddress     string
 }

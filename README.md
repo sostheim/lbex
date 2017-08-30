@@ -164,6 +164,12 @@ The following annotations are defined for LBEX:
         <td>Conditional</td>
     </tr>
     <tr>
+        <td>loadbalancer.lbex/passthrough</td>
+        <td>Preserve source IP addresses</td>
+        <td>False</td>
+        <td>False</td>
+    </tr>
+    <tr>
         <td>loadbalancer.lbex/algorithm</td>
         <td>round_robin, <br />least_conn, <br />least_time<sup>[1]</sup></td>
         <td>round_robin</td>
