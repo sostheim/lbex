@@ -102,8 +102,8 @@ func NewNginxController(cfgType Configuration, nginxConfPath string, healthCheck
 			ErrorLogFile:    "/var/log/nginx/error.log",
 			ErrorLogLevel:   "warn",
 			PidFile:         "/var/run/nginx.pid",
-			User:            "nginx",
-			Group:           "nginx",
+			User:            "root",
+			Group:           "root",
 			WorkerProcesses: "2",
 			/* For future use potentially, can be scrubbed if preferred.
 			Environment: map[string]string{
