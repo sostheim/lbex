@@ -1,7 +1,6 @@
 #!/bin/bash -
 #title           :utils.sh
 #description     :utils
-#author          :Samsung SDSRA
 #==============================================================================
 
 my_dir=$(dirname "${BASH_SOURCE}")

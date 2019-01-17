@@ -1,7 +1,6 @@
 #!/bin/bash -
 #title           :gce-down.sh
 #description     :bring down an LBEX group
-#author          :Samsung SDSRA
 #==============================================================================
 set -o errexit
 set -o nounset

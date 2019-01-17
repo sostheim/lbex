@@ -1,7 +1,6 @@
 #!/bin/bash -
 #title           :gce-up.sh
 #description     :bring up an LBEX group
-#author          :Samsung SDSRA
 #==============================================================================
 set -o errexit
 set -o nounset
@@ -128,7 +127,7 @@ write_files:
     Restart=always
     ExecStartPre=/usr/bin/curl -o /usr/local/bin/kubectl -LO https://storage.googleapis.com/kubernetes-release/release/\$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
     ExecStartPre=/bin/chmod +x /usr/local/bin/kubectl
-    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "https://github.com/samsung-cnct/lbex/releases/download/\$(/usr/bin/basename "\$(/usr/bin/curl -w "%{url_effective}\\n" -I -L -s -S https://github.com/samsung-cnct/lbex/releases/latest -o /dev/null)")/linux_amd64.tar.gz"'
+    ExecStartPre=/bin/bash -c '/usr/bin/curl -so /tmp/lbex.tar.gz -OL "https://github.com/sostheim/lbex/releases/download/\$(/usr/bin/basename "\$(/usr/bin/curl -w "%{url_effective}\\n" -I -L -s -S https://github.com/sostheim/lbex/releases/latest -o /dev/null)")/linux_amd64.tar.gz"'
     ExecStartPre=/bin/mkdir -p /usr/local/bin/lbex
     ExecStartPre=/bin/tar -zxvf /tmp/lbex.tar.gz -C /usr/local/bin/lbex
     ExecStartPre=/bin/chmod +x /usr/local/bin/lbex/lbex

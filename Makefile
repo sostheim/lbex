@@ -2,7 +2,7 @@ NAME      := lbex
 VERSION   := 0.1.12
 TYPE      := alpha
 COMMIT    := $(shell git rev-parse HEAD)
-IMAGE     := quay.io/samsung_cnct/lbex
+IMAGE     := sostheim/lbex
 TAG       ?= latest
 godep=GOPATH=$(shell godep path):${GOPATH}
 
@@ -62,7 +62,7 @@ release: dist push
 	comparison="$$latest_tag..HEAD"; \
 	if [ -z "$$latest_tag" ]; then comparison=""; fi; \
 	changelog=$$(git log $$comparison --oneline --no-merges --reverse); \
-	github-release samsung-cnct/$(NAME) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
+	github-release sostheim/$(NAME) $(VERSION) "$$(git rev-parse --abbrev-ref HEAD)" "**Changelog**<br/>$$changelog" 'dist/*'; \
 	git pull
 
 .PHONY: build compile install deps dist release push tag container

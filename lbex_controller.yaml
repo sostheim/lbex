@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: lbex
-        image: quay.io/samsung_cnct/lbex:latest
+        image: sostheim/lbex:latest
         args: ["--v=2", "--logtostderr=true"]
  
