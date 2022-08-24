@@ -2,6 +2,9 @@
 [![Docker Repository on Quay.io](https://quay.io/repository/samsung_cnct/lbex/status "Docker Repository on Quay.io")](https://quay.io/repository/samsung_cnct/lbex)
 [![maturity](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/github.com/sostheim/lbex)
 
+# !!!! Deprecation Notice !!!!
+This project is not mainatined!
+
 # NGINX Based External Kubernetes Service Load Balancer
 ## Overview
 
